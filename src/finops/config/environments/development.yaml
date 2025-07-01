@@ -1,0 +1,29 @@
+environment: development
+debug: true
+log_level: DEBUG
+
+azure:
+  subscription_id: "${AZURE_SUBSCRIPTION_ID}"
+  tenant_id: "${AZURE_TENANT_ID}"
+  client_id: "${AZURE_CLIENT_ID}"
+  client_secret: "${AZURE_CLIENT_SECRET}"
+  resource_group: "${AZURE_RESOURCE_GROUP}"
+  log_analytics_workspace_id: "${AZURE_LOG_ANALYTICS_WORKSPACE_ID}"
+
+kubernetes:
+  kubeconfig_path: "${HOME}/.kube/config"
+  namespace: "default"
+
+discovery:
+  interval_hours: 1
+  parallel_workers: 2
+  timeout_seconds: 120
+
+storage:
+  backend: "file"
+  base_path: "./data/development"
+
+api:
+  host: "localhost"
+  port: 8000
+  reload: true

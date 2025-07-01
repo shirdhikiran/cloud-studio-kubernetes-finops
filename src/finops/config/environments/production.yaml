@@ -1,0 +1,30 @@
+environment: production
+debug: false
+log_level: INFO
+
+azure:
+  subscription_id: "${AZURE_SUBSCRIPTION_ID}"
+  tenant_id: "${AZURE_TENANT_ID}"
+  client_id: "${AZURE_CLIENT_ID}"
+  client_secret: "${AZURE_CLIENT_SECRET}"
+  resource_group: "${AZURE_RESOURCE_GROUP}"
+  log_analytics_workspace_id: "${AZURE_LOG_ANALYTICS_WORKSPACE_ID}"
+
+kubernetes:
+  kubeconfig_path: "/etc/kubernetes/config"
+  namespace: "finops"
+
+discovery:
+  interval_hours: 24
+  parallel_workers: 10
+  timeout_seconds: 600
+
+storage:
+  backend: "database"
+  connection_string: "${DATABASE_URL}"
+
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 4
+  reload: false

@@ -1,0 +1,10 @@
+-r base.txt
+azure-identity>=1.14.0
+azure-mgmt-containerservice>=20.0.0
+azure-mgmt-monitor>=6.0.0
+azure-mgmt-resource>=23.0.0
+azure-mgmt-compute>=30.0.0
+azure-mgmt-network>=25.0.0
+azure-mgmt-costmanagement>=4.0.0
+azure-monitor-query>=1.2.0
+kubernetes>=27.0.0

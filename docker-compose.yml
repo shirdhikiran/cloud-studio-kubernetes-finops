@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  finops-discovery:
+    build:
+      context: .
+      dockerfile: deployment/docker/Dockerfile
+    environment:
+      - ENVIRONMENT=development
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    command: python scripts/discovery_runner.py
+    restart: unless-stopped
+    
+  finops-api:
+    build:
+      context: .
+      dockerfile: deployment/docker/Dockerfile
+    environment:
+      - ENVIRONMENT=development
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    command: python -m finops.cli serve --host 0.0.0.0 --port 8000
+    restart: unless-stopped
+    depends_on:
+      - finops-discovery
+
+volumes:
+  finops-data:
+  finops-logs:

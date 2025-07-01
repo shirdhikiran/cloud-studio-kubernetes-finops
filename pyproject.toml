@@ -1,0 +1,95 @@
+# pyproject.toml
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kubernetes-finops"
+version = "0.1.0"
+description = "Kubernetes FinOps Platform for Cost Optimization and Resource Management"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Team", email = "team@company.com"}
+]
+keywords = ["kubernetes", "finops", "cost-optimization", "azure", "aks"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "pydantic>=2.0.0",
+    "structlog>=23.0.0",
+    "click>=8.0.0",
+    "aiofiles>=23.0.0",
+    "httpx>=0.24.0",
+    "tenacity>=8.0.0",
+    "PyYAML>=6.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+azure = [
+    "azure-identity>=1.14.0",
+    "azure-mgmt-containerservice>=20.0.0",
+    "azure-mgmt-monitor>=6.0.0",
+    "azure-mgmt-resource>=23.0.0",
+    "azure-mgmt-compute>=30.0.0",
+    "azure-mgmt-network>=25.0.0",
+    "azure-mgmt-costmanagement>=4.0.0",
+    "azure-monitor-query>=1.2.0",
+]
+kubernetes = [
+    "kubernetes>=27.0.0",
+    "kubernetes-asyncio>=24.0.0",
+]
+api = [
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.23.0",
+    "python-multipart>=0.0.6",
+]
+storage = [
+    "sqlalchemy[asyncio]>=2.0.0",
+    "alembic>=1.12.0",
+    "redis[hiredis]>=4.6.0",
+]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.5.0",
+    "pre-commit>=3.3.0",
+]
+
+[project.scripts]
+finops-discover = "finops.cli:discover"
+finops-analyze = "finops.cli:analyze"
+finops-serve = "finops.cli:serve"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true

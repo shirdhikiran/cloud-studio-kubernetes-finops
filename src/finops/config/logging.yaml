@@ -1,0 +1,44 @@
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  json:
+    class: structlog.stdlib.ProcessorFormatter
+    processor: structlog.processors.JSONRenderer
+  
+  text:
+    format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    datefmt: '%Y-%m-%d %H:%M:%S'
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: json
+    stream: ext://sys.stdout
+  
+  file:
+    class: logging.FileHandler
+    level: DEBUG
+    formatter: json
+    filename: logs/finops.log
+
+loggers:
+  finops:
+    level: DEBUG
+    handlers: [console, file]
+    propagate: false
+  
+  azure:
+    level: WARNING
+    handlers: [console]
+    propagate: false
+  
+  kubernetes:
+    level: WARNING
+    handlers: [console]
+    propagate: false
+
+root:
+  level: INFO
+  handlers: [console]
