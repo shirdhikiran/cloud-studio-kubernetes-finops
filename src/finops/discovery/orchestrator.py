@@ -74,7 +74,7 @@ class DiscoveryOrchestrator:
         results = []
         
         self.logger.info(f"Starting sequential discovery with {len(self.services)} services")
-        
+        import pdb; pdb.set_trace()
         for service in self.services:
             try:
                 result = await self._run_service_with_timeout(service)

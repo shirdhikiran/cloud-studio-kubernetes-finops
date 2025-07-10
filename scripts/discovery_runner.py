@@ -35,6 +35,11 @@ async def main():
         azure_factory = AzureClientFactory(azure_config)
         azure_clients = await azure_factory.create_all_clients()
 
+        metrics_config = azure_config.copy()
+        if cluster_name and resource_group:
+            metrics_config['cluster_resource_id'] = f"/subscriptions/{settings.azure.subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.ContainerService/managedClusters/{cluster_name}"
+        
+
         
         
         # Initialize storage
@@ -46,26 +51,29 @@ async def main():
         from finops.discovery.infrastructure.network_discovery import NetworkDiscoveryService
         from finops.discovery.infrastructure.storage_discovery import StorageDiscoveryService
         from finops.discovery.cost.cost_discovery import CostDiscoveryService
+        from finops.discovery.utilization.metrics_collector import MetricsCollectionService
         
         services = [
-            AKSDiscoveryService(azure_clients['aks'], azure_config),
-            NodePoolDiscoveryService(azure_clients['aks'], azure_config),
-            NetworkDiscoveryService(azure_clients['resource'], azure_config),
-            StorageDiscoveryService(azure_clients['resource'], azure_config),
-            CostDiscoveryService(azure_clients['cost'], azure_config),
+            # AKSDiscoveryService(azure_clients['aks'], azure_config),
+            # NodePoolDiscoveryService(azure_clients['aks'], azure_config),
+            # NetworkDiscoveryService(azure_clients['resource'], azure_config),
+            # StorageDiscoveryService(azure_clients['resource'], azure_config),
+            # CostDiscoveryService(azure_clients['cost'], azure_config),
+            MetricsCollectionService(azure_clients['monitor'], azure_config)
+
         ]
         
         # Add Kubernetes discovery if kubeconfig is available
         
-        if settings.kubernetes.kubeconfig_path and Path(settings.kubernetes.kubeconfig_path).exists():
-            from finops.clients.kubernetes.client_factory import KubernetesClientFactory
-            from finops.discovery.kubernetes.resource_discovery import ResourceDiscoveryService
+        # if settings.kubernetes.kubeconfig_path and Path(settings.kubernetes.kubeconfig_path).exists():
+        #     from finops.clients.kubernetes.client_factory import KubernetesClientFactory
+        #     from finops.discovery.kubernetes.resource_discovery import ResourceDiscoveryService
             
-            k8s_factory = KubernetesClientFactory(settings.kubernetes.model_dump())
-            k8s_client = k8s_factory.create_client()
+        #     k8s_factory = KubernetesClientFactory(settings.kubernetes.model_dump())
+        #     k8s_client = k8s_factory.create_client()
             
-            k8s_service = ResourceDiscoveryService(k8s_client, settings.kubernetes.model_dump())
-            services.append(k8s_service)
+        #     k8s_service = ResourceDiscoveryService(k8s_client, settings.kubernetes.model_dump())
+        #     services.append(k8s_service)
         
         # Run discovery
         orchestrator = DiscoveryOrchestrator(

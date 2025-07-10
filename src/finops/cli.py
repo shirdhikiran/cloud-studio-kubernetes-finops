@@ -9,6 +9,10 @@ from datetime import datetime, timedelta, timezone
 
 from finops.config.settings import Settings
 from finops.core.utils import setup_logging
+from finops.discovery.cost.cost_discovery import CostDiscoveryService
+from finops.discovery.enhanced_orchestrator import EnhancedDiscoveryOrchestrator
+from finops.discovery.infrastructure.aks_discovery import AKSDiscoveryService
+from finops.discovery.infrastructure.node_pool_discovery import NodePoolDiscoveryService
 from finops.discovery.orchestrator import DiscoveryOrchestrator
 from finops.clients.azure.client_factory import AzureClientFactory
 from finops.clients.kubernetes.client_factory import KubernetesClientFactory
@@ -59,6 +63,9 @@ def discover(ctx, resource_group, cluster_name, output, parallel, include_metric
             azure_config = settings.azure.model_dump()
             if resource_group:
                 azure_config['resource_group'] = resource_group
+
+            if cluster_name:
+                azure_config['cluster_name'] = cluster_name
             
             azure_factory = AzureClientFactory(azure_config)
             azure_clients = await azure_factory.create_all_clients()
@@ -67,53 +74,70 @@ def discover(ctx, resource_group, cluster_name, output, parallel, include_metric
             storage = FileStorage(settings.storage.base_path)
             
             # Create discovery services
-            from finops.discovery.infrastructure.aks_discovery import AKSDiscoveryService
-            from finops.discovery.infrastructure.node_pool_discovery import NodePoolDiscoveryService
-            from finops.discovery.cost.cost_discovery import CostDiscoveryService
-            from src.finops.discovery.infrastructure.network_discovery import NetworkDiscoveryService
-            from src.finops.discovery.infrastructure.storage_discovery import StorageDiscoveryService
-            from src.finops.discovery.cost.cost_discovery import CostDiscoveryService
+            
+            # from finops.discovery.infrastructure.aks_discovery import AKSDiscoveryService
+            # from finops.discovery.infrastructure.node_pool_discovery import NodePoolDiscoveryService
+            # from finops.discovery.infrastructure.network_discovery import NetworkDiscoveryService
+            # from finops.discovery.infrastructure.storage_discovery import StorageDiscoveryService
+            # from finops.discovery.cost.cost_discovery import CostDiscoveryService
+            # from finops.discovery.utilization.metrics_collector1 import MetricsCollectionService
             
             services = []
+
+            services = [
+                AKSDiscoveryService(azure_clients['aks'], azure_config),
+                NodePoolDiscoveryService(azure_clients['aks'], azure_config),
+                CostDiscoveryService(azure_clients['cost'], azure_config),
+            ]
             
-            # AKS discovery
-            aks_service = AKSDiscoveryService(azure_clients['aks'], azure_config)
-            services.append(aks_service)
+            # # AKS discovery
+            # aks_service = AKSDiscoveryService(azure_clients['aks'], azure_config)
+            # services.append(aks_service)
             
-            # Node pool discovery
-            node_pool_config = azure_config.copy()
-            if cluster_name:
-                node_pool_config['cluster_name'] = cluster_name
+            # # Node pool discovery
+            # node_pool_config = azure_config.copy()
+            # if cluster_name:
+            #     node_pool_config['cluster_name'] = cluster_name
             
-            node_pool_service = NodePoolDiscoveryService(azure_clients['aks'], node_pool_config)
-            services.append(node_pool_service)
+            # node_pool_service = NodePoolDiscoveryService(azure_clients['aks'], node_pool_config)
+            # services.append(node_pool_service)
+
+            # network_service = NetworkDiscoveryService(azure_clients['resource'], azure_config)
+            # services.append(network_service)
+            # storage_service = StorageDiscoveryService(azure_clients['resource'], azure_config)
+            # services.append(storage_service)
             
-            # Cost discovery
-            cost_service = CostDiscoveryService(azure_clients['cost'], azure_config)
-            services.append(cost_service)
+            # # Cost discovery
+            # cost_service = CostDiscoveryService(azure_clients['cost'], azure_config)
+            # services.append(cost_service)
             
             # Metrics discovery (if requested)
-            if include_metrics:
-                from finops.discovery.utilization.metrics_collector import MetricsCollectionService
+            # if include_metrics:
+            #     from finops.discovery.utilization.metrics_collector1 import MetricsCollectionService
                 
-                metrics_config = azure_config.copy()
-                if cluster_name and resource_group:
-                    metrics_config['cluster_resource_id'] = f"/subscriptions/{settings.azure.subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.ContainerService/managedClusters/{cluster_name}"
+            #     metrics_config = azure_config.copy()
+            #     if cluster_name and resource_group:
+            #         metrics_config['cluster_resource_id'] = f"/subscriptions/{settings.azure.subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.ContainerService/managedClusters/{cluster_name}"
                 
-                metrics_service = MetricsCollectionService(azure_clients['monitor'], metrics_config)
-                services.append(metrics_service)
+            #     metrics_service = MetricsCollectionService(azure_clients['monitor'], metrics_config)
+            #     services.append(metrics_service)
             
             # Run discovery
-            orchestrator = DiscoveryOrchestrator(
-                services=services,
-                max_concurrency=settings.discovery.parallel_workers,
-                timeout_seconds=settings.discovery.timeout_seconds
-            )
+            # orchestrator = DiscoveryOrchestrator(
+            #     services=services,
+            #     max_concurrency=settings.discovery.parallel_workers,
+            #     timeout_seconds=settings.discovery.timeout_seconds
+            # )
+
+            enhanced_orchestrator = EnhancedDiscoveryOrchestrator(services)
+        
+        
             
-            if parallel:
-                results = await orchestrator.run_parallel_discovery()
-            else:
-                results = await orchestrator.run_sequential_discovery()
+            # if parallel:
+            #     results = await orchestrator.run_parallel_discovery()
+            # else:
+            #     results = await orchestrator.run_sequential_discovery()
+            results = await enhanced_orchestrator.run_discovery_with_analysis()
             
             # Save results
             await storage.save("discovery_results", "latest", results)

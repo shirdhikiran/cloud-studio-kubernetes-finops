@@ -1,0 +1,183 @@
+{
+  "discovery_data": {
+    "comprehensive_metrics_collection": {
+      "type": "comprehensive_metrics_collection",
+      "status": "success",
+      "data": [
+        {
+          "type": "cluster_metrics",
+          "cluster_name": "cloudstoreyaks",
+          "resource_id": "/subscriptions/5785f902-e9bc-4b4c-8e09-2732a083cdd4/resourceGroups/vnet-aks-rg/providers/Microsoft.ContainerService/managedClusters/cloudstoreyaks",
+          "data": {
+            "cpu_metrics": {},
+            "memory_metrics": {},
+            "disk_metrics": {},
+            "network_metrics": {},
+            "pod_metrics": {},
+            "autoscaler_metrics": {},
+            "collection_metadata": {
+              "resource_id": "/subscriptions/5785f902-e9bc-4b4c-8e09-2732a083cdd4/resourceGroups/vnet-aks-rg/providers/Microsoft.ContainerService/managedClusters/cloudstoreyaks",
+              "start_time": "2025-07-07T07:26:41.424925+00:00",
+              "end_time": "2025-07-08T07:26:41.424925+00:00",
+              "granularity_minutes": 5.0,
+              "metrics_collected": [],
+              "metrics_failed": []
+            },
+            "summary": {
+              "cpu_summary": {},
+              "memory_summary": {},
+              "network_summary": {},
+              "overall_health": "unknown"
+            }
+          },
+          "finops_analysis": {
+            "resource_efficiency": {},
+            "cost_optimization_opportunities": [],
+            "performance_insights": {},
+            "recommendations": []
+          },
+          "collection_metadata": {
+            "start_time": "2025-07-07T07:26:41.424925+00:00",
+            "end_time": "2025-07-08T07:26:41.424925+00:00",
+            "granularity_minutes": 5,
+            "metrics_collected": [],
+            "metrics_failed": []
+          }
+        },
+        {
+          "type": "individual_node_metrics",
+          "status": "failed",
+          "error": "Failed to collect individual node metrics: 'str' object has no attribute 'name'",
+          "cluster_name": "cloudstoreyaks"
+        },
+        {
+          "type": "storage_metrics",
+          "cluster_name": "cloudstoreyaks",
+          "resource_id": "/subscriptions/5785f902-e9bc-4b4c-8e09-2732a083cdd4/resourceGroups/vnet-aks-rg/providers/Microsoft.ContainerService/managedClusters/cloudstoreyaks",
+          "data": {
+            "cluster_storage_metrics": {},
+            "persistent_volume_metrics": {},
+            "storage_class_analysis": {},
+            "collection_metadata": {
+              "resource_id": "/subscriptions/5785f902-e9bc-4b4c-8e09-2732a083cdd4/resourceGroups/vnet-aks-rg/providers/Microsoft.ContainerService/managedClusters/cloudstoreyaks",
+              "start_time": "2025-07-07T07:26:41.424925+00:00",
+              "end_time": "2025-07-08T07:26:41.424925+00:00"
+            }
+          },
+          "finops_analysis": {
+            "storage_efficiency": {},
+            "cost_optimization_opportunities": [],
+            "capacity_insights": {},
+            "recommendations": []
+          },
+          "collection_metadata": {
+            "start_time": "2025-07-07T07:26:41.424925+00:00",
+            "end_time": "2025-07-08T07:26:41.424925+00:00"
+          }
+        },
+        {
+          "type": "network_metrics",
+          "cluster_name": "cloudstoreyaks",
+          "resource_id": "/subscriptions/5785f902-e9bc-4b4c-8e09-2732a083cdd4/resourceGroups/vnet-aks-rg/providers/Microsoft.ContainerService/managedClusters/cloudstoreyaks",
+          "data": {
+            "cluster_network_metrics": {},
+            "ingress_metrics": {},
+            "egress_metrics": {},
+            "load_balancer_metrics": {},
+            "collection_metadata": {
+              "resource_id": "/subscriptions/5785f902-e9bc-4b4c-8e09-2732a083cdd4/resourceGroups/vnet-aks-rg/providers/Microsoft.ContainerService/managedClusters/cloudstoreyaks",
+              "start_time": "2025-07-07T07:26:41.424925+00:00",
+              "end_time": "2025-07-08T07:26:41.424925+00:00"
+            }
+          },
+          "finops_analysis": {
+            "bandwidth_efficiency": {},
+            "cost_optimization_opportunities": [],
+            "traffic_insights": {},
+            "recommendations": []
+          },
+          "collection_metadata": {
+            "start_time": "2025-07-07T07:26:41.424925+00:00",
+            "end_time": "2025-07-08T07:26:41.424925+00:00"
+          }
+        },
+        {
+          "type": "cluster_health_metrics",
+          "cluster_name": "cloudstoreyaks",
+          "resource_id": "/subscriptions/5785f902-e9bc-4b4c-8e09-2732a083cdd4/resourceGroups/vnet-aks-rg/providers/Microsoft.ContainerService/managedClusters/cloudstoreyaks",
+          "data": {
+            "cluster_events": {},
+            "node_status": {},
+            "pod_health": {},
+            "resource_quotas": {},
+            "collection_metadata": {
+              "resource_id": "/subscriptions/5785f902-e9bc-4b4c-8e09-2732a083cdd4/resourceGroups/vnet-aks-rg/providers/Microsoft.ContainerService/managedClusters/cloudstoreyaks",
+              "start_time": "2025-07-07T07:26:41.424925+00:00",
+              "end_time": "2025-07-08T07:26:41.424925+00:00"
+            }
+          },
+          "finops_analysis": {
+            "operational_efficiency": {},
+            "cost_impact_events": [],
+            "stability_insights": {},
+            "recommendations": []
+          },
+          "collection_metadata": {
+            "start_time": "2025-07-07T07:26:41.424925+00:00",
+            "end_time": "2025-07-08T07:26:41.424925+00:00"
+          }
+        },
+        {
+          "type": "metrics_collection_summary",
+          "cluster_name": "cloudstoreyaks",
+          "data": {
+            "collection_start_time": "2025-07-08T07:26:41.424919+00:00",
+            "collection_end_time": "2025-07-08T07:27:02.276888+00:00",
+            "collection_duration_seconds": 20.851969,
+            "total_metric_categories": 5,
+            "successful_collections": 4,
+            "failed_collections": 1,
+            "time_range_hours": 24,
+            "granularity_minutes": 5,
+            "cluster_resource_id": "/subscriptions/5785f902-e9bc-4b4c-8e09-2732a083cdd4/resourceGroups/vnet-aks-rg/providers/Microsoft.ContainerService/managedClusters/cloudstoreyaks",
+            "configuration": {
+              "include_cluster_metrics": true,
+              "include_individual_node_metrics": true,
+              "include_pod_metrics": false,
+              "include_storage_metrics": true,
+              "include_network_metrics": true,
+              "include_health_metrics": true
+            }
+          }
+        }
+      ],
+      "error": null,
+      "metadata": {
+        "start_time": "2025-07-08 07:26:41.423865+00:00",
+        "end_time": "2025-07-08 07:27:02.277614+00:00",
+        "duration_seconds": 20.853749,
+        "resources_discovered": 6,
+        "errors": []
+      }
+    }
+  },
+  "summary": {
+    "total_resources": 6,
+    "successful_discoveries": 1,
+    "failed_discoveries": 0,
+    "discovery_types": [
+      "comprehensive_metrics_collection"
+    ],
+    "errors": []
+  },
+  "orchestrator_metadata": {
+    "start_time": "2025-07-08T07:26:41.421396+00:00",
+    "end_time": "2025-07-08T07:27:02.277761+00:00",
+    "duration_seconds": 20.856365,
+    "total_services": 1,
+    "successful_services": 1,
+    "failed_services": 0,
+    "max_concurrency": 5,
+    "timeout_seconds": 300
+  }
+}

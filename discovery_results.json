@@ -1,0 +1,1119 @@
+{
+  "discovery_info": "discovery_id='16a399c3-a40a-4fc1-9454-75d3355724a9' discovery_timestamp=datetime.datetime(2025, 7, 10, 9, 44, 3, 280373) discovery_version='1.0.0' clusters=[ClusterInfo(id='/subscriptions/5785f902-e9bc-4b4c-8e09-2732a083cdd4/resourcegroups/vnet-aks-rg/providers/Microsoft.ContainerService/managedClusters/cloudstoreyaks', name='cloudstoreyaks', resource_group='vnet-aks-rg', location='centralindia', kubernetes_version='1.30.12', provisioning_state='Succeeded', fqdn='cloudstoreyaks-dns-5fo2hier.hcp.centralindia.azmk8s.io', node_resource_group='MC_vnet-aks-rg_cloudstoreyaks_centralindia', dns_prefix='cloudstoreyaks-dns', enable_rbac=True, network_profile={'network_plugin': 'azure', 'service_cidr': '10.0.0.0/16', 'dns_service_ip': '10.0.0.10', 'pod_cidr': '10.244.0.0/16', 'load_balancer_sku': 'Standard'}, addon_profiles={'azureKeyvaultSecretsProvider': {'enabled': True, 'config': {'enableSecretRotation': 'false', 'rotationPollInterval': '2m'}}, 'azurepolicy': {'enabled': True, 'config': None}, 'omsAgent': {'enabled': True, 'config': {'logAnalyticsWorkspaceResourceID': '/subscriptions/5785f902-e9bc-4b4c-8e09-2732a083cdd4/resourceGroups/INCDCXS00NRSG01/providers/Microsoft.OperationalInsights/workspaces/INCDCXS00NLAW01', 'useAADAuth': 'true'}}}, sku={'name': 'Base', 'tier': 'Free'}, created_time=None, last_modified=None, tags={'Name': 'cloudstoreyaks'}, node_pools=[NodePoolInfo(name='agentpool', cluster_name='cloudstoreyaks', vm_size='Standard_D2s_v3', os_type='Linux', os_disk_size_gb=128, count=2, min_count=1, max_count=2, auto_scaling_enabled=True, node_taints=[], node_labels={}, availability_zones=[], mode=<NodePoolMode.SYSTEM: 'System'>, orchestrator_version='1.30.12', provisioning_state='Succeeded', power_state='Running', max_pods=110, os_disk_type='Managed', scale_set_priority=None, spot_max_price=None, upgrade_settings={'max_surge': '10%'}, created=None, tags={'Name': 'cloudstoreyaks'}, nodes=[], utilization=ResourceMetrics(cpu_usage=0.0, memory_usage=0.0, storage_usage=0.0, network_in=0.0, network_out=0.0, peak_cpu=0.0, peak_memory=0.0, avg_cpu=0.0, avg_memory=0.0, collection_timestamp=datetime.datetime(2025, 7, 10, 9, 44, 3, 280721)), cost_data=CostData(total=64.36772371929241, compute=0.000718567, storage=0.0, network=0.0, monitoring=64.3670051522924, other=0.0, currency='USD', daily_breakdown=[], by_service={}, cost_trend='stable', allocation_percentage=100.0), scaling_history=[])], nodes=[], namespaces=[], workloads=[], services=[], storage=[], ingresses=[], network_resources=[], azure_resources=[], properties={}, raw_cost_data=CostData(total=64.36772371929241, compute=0.000718567, storage=0.0, network=0.0, monitoring=64.3670051522924, other=0.0, currency='USD', daily_breakdown=[{'date': '2025-06-10', 'cost': 1.8439920057821935, 'usage': 51.51883432903226, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.28111200578219353}, 'categories': {'monitoring': 1.8439920057821935}}, {'date': '2025-06-11', 'cost': 1.8440002169861935, 'usage': 51.51960472903225, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.2811202169861936}, 'categories': {'monitoring': 1.8440002169861935}}, {'date': '2025-06-12', 'cost': 1.8439889834541936, 'usage': 51.51920742903226, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.28110898345419355}, 'categories': {'monitoring': 1.8439889834541936}}, {'date': '2025-06-13', 'cost': 1.8440828159061935, 'usage': 51.520869729032256, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.28120281590619356}, 'categories': {'monitoring': 1.8440828159061935}}, {'date': '2025-06-14', 'cost': 1.8436504068214195, 'usage': 51.51348551290322, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.28077040682141935}, 'categories': {'monitoring': 1.8436504068214195}}, {'date': '2025-06-15', 'cost': 1.8313747366646451, 'usage': 51.388438796774196, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.26849473666464513}, 'categories': {'monitoring': 1.8313747366646451}}, {'date': '2025-06-16', 'cost': 1.8318196280984946, 'usage': 51.39509424086022, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.26893962809849464}, 'categories': {'monitoring': 1.8318196280984946}}, {'date': '2025-06-17', 'cost': 2.0346588228061937, 'usage': 53.27108672903226, 'currency': 'USD', 'services': {'Container Registry': 0.000718567, 'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.4710602558061936}, 'categories': {'compute': 0.000718567, 'monitoring': 2.0339402558061934}}, {'date': '2025-06-18', 'cost': 2.2195296340221935, 'usage': 54.98520822903225, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6566496340221936}, 'categories': {'monitoring': 2.2195296340221935}}, {'date': '2025-06-19', 'cost': 2.2201300341741934, 'usage': 54.990469629032255, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6572500341741936}, 'categories': {'monitoring': 2.2201300341741934}}, {'date': '2025-06-20', 'cost': 2.2202892811981934, 'usage': 54.98493212903226, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6574092811981935}, 'categories': {'monitoring': 2.2202892811981934}}, {'date': '2025-06-21', 'cost': 2.2201080699021936, 'usage': 54.982687029032256, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6572280699021936}, 'categories': {'monitoring': 2.2201080699021936}}, {'date': '2025-06-22', 'cost': 2.2175707334741936, 'usage': 54.96240172903226, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6546907334741936}, 'categories': {'monitoring': 2.2175707334741936}}, {'date': '2025-06-23', 'cost': 2.2184981928832688, 'usage': 54.98121515698925, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6556181928832688}, 'categories': {'monitoring': 2.2184981928832688}}, {'date': '2025-06-24', 'cost': 2.2185505279301934, 'usage': 54.981545629032254, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6556705279301935}, 'categories': {'monitoring': 2.2185505279301934}}, {'date': '2025-06-25', 'cost': 2.2163284202581934, 'usage': 54.94819772903226, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6534484202581936}, 'categories': {'monitoring': 2.2163284202581934}}, {'date': '2025-06-26', 'cost': 2.2113865420181935, 'usage': 54.89993392903226, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6485065420181936}, 'categories': {'monitoring': 2.2113865420181935}}, {'date': '2025-06-27', 'cost': 2.2167229316421935, 'usage': 54.94845672903226, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6538429316421935}, 'categories': {'monitoring': 2.2167229316421935}}, {'date': '2025-06-28', 'cost': 2.215930989421419, 'usage': 54.938128512903226, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6530509894214194}, 'categories': {'monitoring': 2.215930989421419}}, {'date': '2025-06-29', 'cost': 2.2155262400166453, 'usage': 54.93119329677419, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6526462400166452}, 'categories': {'monitoring': 2.2155262400166453}}, {'date': '2025-06-30', 'cost': 2.21568893940357, 'usage': 54.93428366881721, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6528089394035699}, 'categories': {'monitoring': 2.21568893940357}}, {'date': '2025-07-01', 'cost': 2.2164292696301935, 'usage': 54.947268229032254, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6535492696301936}, 'categories': {'monitoring': 2.2164292696301935}}, {'date': '2025-07-02', 'cost': 2.2158963280621933, 'usage': 54.941215529032256, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6530163280621936}, 'categories': {'monitoring': 2.2158963280621933}}, {'date': '2025-07-03', 'cost': 2.2162286685421932, 'usage': 54.944047529032254, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6533486685421935}, 'categories': {'monitoring': 2.2162286685421932}}, {'date': '2025-07-04', 'cost': 2.2167605918781934, 'usage': 54.94901622903225, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6538805918781936}, 'categories': {'monitoring': 2.2167605918781934}}, {'date': '2025-07-05', 'cost': 2.2165766432421936, 'usage': 54.94694322903226, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6536966432421936}, 'categories': {'monitoring': 2.2165766432421936}}, {'date': '2025-07-06', 'cost': 2.2226634178981937, 'usage': 55.00948952903226, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6597834178981936}, 'categories': {'monitoring': 2.2226634178981937}}, {'date': '2025-07-07', 'cost': 2.2235606474341933, 'usage': 55.03091642903226, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6606806474341935}, 'categories': {'monitoring': 2.2235606474341933}}, {'date': '2025-07-08', 'cost': 2.2236007887861935, 'usage': 55.017793629032255, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6607207887861936}, 'categories': {'monitoring': 2.2236007887861935}}, {'date': '2025-07-09', 'cost': 2.2236502777581935, 'usage': 55.01817882903226, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6607702777581935}, 'categories': {'monitoring': 2.2236502777581935}}, {'date': '2025-07-10', 'cost': 0.6485289331964732, 'usage': 16.047016904301074, 'currency': 'USD', 'services': {'Azure Grafana Service': 0.45584, 'Azure Monitor': 0.19268893319647312}, 'categories': {'monitoring': 0.6485289331964732}}], by_service={'Azure Grafana Service': {'cost': 47.342240000000004, 'usage_quantity': 1454.0, 'currency': 'USD', 'resource_types': ['microsoft.dashboard/grafana']}, 'Azure Monitor': {'cost': 17.024765152292392, 'usage_quantity': 184.9608019580645, 'currency': 'USD', 'resource_types': ['microsoft.insights/metricalerts', 'microsoft.monitor/accounts']}, 'Container Registry': {'cost': 0.000718567, 'usage_quantity': 0.006359, 'currency': 'USD', 'resource_types': ['microsoft.containerregistry/registries']}}, cost_trend='decreasing', allocation_percentage=0.0), utilization=ResourceMetrics(cpu_usage=0.0, memory_usage=0.0, storage_usage=0.0, network_in=0.0, network_out=0.0, peak_cpu=0.0, peak_memory=0.0, avg_cpu=0.0, avg_memory=0.0, collection_timestamp=datetime.datetime(2025, 7, 10, 9, 44, 3, 280609)))] totals=DiscoveryTotals(total_clusters=1, total_node_pools=1, total_nodes=0, total_namespaces=0, total_workloads=0, total_pods=0, total_services=0, total_storage_volumes=0, total_ingresses=0, total_network_resources=0, total_azure_resources=0, total_cost=CostData(total=64.36772371929241, compute=0.0, storage=0.0, network=0.0, monitoring=0.0, other=0.0, currency='USD', daily_breakdown=[], by_service={}, cost_trend='stable', allocation_percentage=0.0), cost_by_cluster={'cloudstoreyaks': CostData(total=64.36772371929241, compute=0.000718567, storage=0.0, network=0.0, monitoring=64.3670051522924, other=0.0, currency='USD', daily_breakdown=[{'date': '2025-06-10', 'cost': 1.8439920057821935, 'usage': 51.51883432903226, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.28111200578219353}, 'categories': {'monitoring': 1.8439920057821935}}, {'date': '2025-06-11', 'cost': 1.8440002169861935, 'usage': 51.51960472903225, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.2811202169861936}, 'categories': {'monitoring': 1.8440002169861935}}, {'date': '2025-06-12', 'cost': 1.8439889834541936, 'usage': 51.51920742903226, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.28110898345419355}, 'categories': {'monitoring': 1.8439889834541936}}, {'date': '2025-06-13', 'cost': 1.8440828159061935, 'usage': 51.520869729032256, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.28120281590619356}, 'categories': {'monitoring': 1.8440828159061935}}, {'date': '2025-06-14', 'cost': 1.8436504068214195, 'usage': 51.51348551290322, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.28077040682141935}, 'categories': {'monitoring': 1.8436504068214195}}, {'date': '2025-06-15', 'cost': 1.8313747366646451, 'usage': 51.388438796774196, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.26849473666464513}, 'categories': {'monitoring': 1.8313747366646451}}, {'date': '2025-06-16', 'cost': 1.8318196280984946, 'usage': 51.39509424086022, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.26893962809849464}, 'categories': {'monitoring': 1.8318196280984946}}, {'date': '2025-06-17', 'cost': 2.0346588228061937, 'usage': 53.27108672903226, 'currency': 'USD', 'services': {'Container Registry': 0.000718567, 'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.4710602558061936}, 'categories': {'compute': 0.000718567, 'monitoring': 2.0339402558061934}}, {'date': '2025-06-18', 'cost': 2.2195296340221935, 'usage': 54.98520822903225, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6566496340221936}, 'categories': {'monitoring': 2.2195296340221935}}, {'date': '2025-06-19', 'cost': 2.2201300341741934, 'usage': 54.990469629032255, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6572500341741936}, 'categories': {'monitoring': 2.2201300341741934}}, {'date': '2025-06-20', 'cost': 2.2202892811981934, 'usage': 54.98493212903226, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6574092811981935}, 'categories': {'monitoring': 2.2202892811981934}}, {'date': '2025-06-21', 'cost': 2.2201080699021936, 'usage': 54.982687029032256, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6572280699021936}, 'categories': {'monitoring': 2.2201080699021936}}, {'date': '2025-06-22', 'cost': 2.2175707334741936, 'usage': 54.96240172903226, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6546907334741936}, 'categories': {'monitoring': 2.2175707334741936}}, {'date': '2025-06-23', 'cost': 2.2184981928832688, 'usage': 54.98121515698925, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6556181928832688}, 'categories': {'monitoring': 2.2184981928832688}}, {'date': '2025-06-24', 'cost': 2.2185505279301934, 'usage': 54.981545629032254, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6556705279301935}, 'categories': {'monitoring': 2.2185505279301934}}, {'date': '2025-06-25', 'cost': 2.2163284202581934, 'usage': 54.94819772903226, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6534484202581936}, 'categories': {'monitoring': 2.2163284202581934}}, {'date': '2025-06-26', 'cost': 2.2113865420181935, 'usage': 54.89993392903226, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6485065420181936}, 'categories': {'monitoring': 2.2113865420181935}}, {'date': '2025-06-27', 'cost': 2.2167229316421935, 'usage': 54.94845672903226, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6538429316421935}, 'categories': {'monitoring': 2.2167229316421935}}, {'date': '2025-06-28', 'cost': 2.215930989421419, 'usage': 54.938128512903226, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6530509894214194}, 'categories': {'monitoring': 2.215930989421419}}, {'date': '2025-06-29', 'cost': 2.2155262400166453, 'usage': 54.93119329677419, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6526462400166452}, 'categories': {'monitoring': 2.2155262400166453}}, {'date': '2025-06-30', 'cost': 2.21568893940357, 'usage': 54.93428366881721, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6528089394035699}, 'categories': {'monitoring': 2.21568893940357}}, {'date': '2025-07-01', 'cost': 2.2164292696301935, 'usage': 54.947268229032254, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6535492696301936}, 'categories': {'monitoring': 2.2164292696301935}}, {'date': '2025-07-02', 'cost': 2.2158963280621933, 'usage': 54.941215529032256, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6530163280621936}, 'categories': {'monitoring': 2.2158963280621933}}, {'date': '2025-07-03', 'cost': 2.2162286685421932, 'usage': 54.944047529032254, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6533486685421935}, 'categories': {'monitoring': 2.2162286685421932}}, {'date': '2025-07-04', 'cost': 2.2167605918781934, 'usage': 54.94901622903225, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6538805918781936}, 'categories': {'monitoring': 2.2167605918781934}}, {'date': '2025-07-05', 'cost': 2.2165766432421936, 'usage': 54.94694322903226, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6536966432421936}, 'categories': {'monitoring': 2.2165766432421936}}, {'date': '2025-07-06', 'cost': 2.2226634178981937, 'usage': 55.00948952903226, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6597834178981936}, 'categories': {'monitoring': 2.2226634178981937}}, {'date': '2025-07-07', 'cost': 2.2235606474341933, 'usage': 55.03091642903226, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6606806474341935}, 'categories': {'monitoring': 2.2235606474341933}}, {'date': '2025-07-08', 'cost': 2.2236007887861935, 'usage': 55.017793629032255, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6607207887861936}, 'categories': {'monitoring': 2.2236007887861935}}, {'date': '2025-07-09', 'cost': 2.2236502777581935, 'usage': 55.01817882903226, 'currency': 'USD', 'services': {'Azure Grafana Service': 1.56288, 'Azure Monitor': 0.6607702777581935}, 'categories': {'monitoring': 2.2236502777581935}}, {'date': '2025-07-10', 'cost': 0.6485289331964732, 'usage': 16.047016904301074, 'currency': 'USD', 'services': {'Azure Grafana Service': 0.45584, 'Azure Monitor': 0.19268893319647312}, 'categories': {'monitoring': 0.6485289331964732}}], by_service={'Azure Grafana Service': {'cost': 47.342240000000004, 'usage_quantity': 1454.0, 'currency': 'USD', 'resource_types': ['microsoft.dashboard/grafana']}, 'Azure Monitor': {'cost': 17.024765152292392, 'usage_quantity': 184.9608019580645, 'currency': 'USD', 'resource_types': ['microsoft.insights/metricalerts', 'microsoft.monitor/accounts']}, 'Container Registry': {'cost': 0.000718567, 'usage_quantity': 0.006359, 'currency': 'USD', 'resource_types': ['microsoft.containerregistry/registries']}}, cost_trend='decreasing', allocation_percentage=0.0)}, cost_by_namespace={}, cost_by_resource_type={}, overall_utilization=ResourceMetrics(cpu_usage=0.0, memory_usage=0.0, storage_usage=0.0, network_in=0.0, network_out=0.0, peak_cpu=0.0, peak_memory=0.0, avg_cpu=0.0, avg_memory=0.0, collection_timestamp=datetime.datetime(2025, 7, 10, 9, 44, 3, 280465)), utilization_by_cluster={}, discovery_timestamp=datetime.datetime(2025, 7, 10, 9, 43, 51, 614917, tzinfo=datetime.timezone.utc), discovery_duration_seconds=11.664007, successful_discoveries=3, failed_discoveries=0, warnings=[], errors=[]) metadata={'orchestrator_metadata': {'start_time': '2025-07-10T09:43:51.614917+00:00', 'end_time': '2025-07-10T09:44:03.278924+00:00', 'duration_seconds': 11.664007, 'total_services': 3, 'successful_services': 3, 'failed_services': 0, 'max_concurrency': 5, 'timeout_seconds': None}, 'summary': {'total_resources': 10, 'successful_discoveries': 3, 'failed_discoveries': 0, 'discovery_types': ['aks_clusters', 'node_pools', 'cost_analysis'], 'errors': []}, 'discovery_types': ['aks_clusters', 'node_pools', 'cost_analysis']}",
+  "cost_summary": {
+    "total_cost": 64.36772371929241,
+    "currency": "USD",
+    "cost_by_cluster": {
+      "cloudstoreyaks": 64.36772371929241
+    },
+    "cost_breakdown": {
+      "compute": 0.0,
+      "storage": 0.0,
+      "network": 0.0,
+      "monitoring": 0.0,
+      "other": 0.0
+    }
+  },
+  "utilization_summary": {
+    "overall_cpu_usage": 0.0,
+    "overall_memory_usage": 0.0,
+    "overall_storage_usage": 0.0,
+    "utilization_by_cluster": {}
+  },
+  "efficiency_insights": {
+    "clusters_analyzed": 1,
+    "underutilized_clusters": [
+      {
+        "name": "cloudstoreyaks",
+        "cpu_usage": 0.0,
+        "memory_usage": 0.0,
+        "potential_savings": 19.310317115787722
+      }
+    ],
+    "overutilized_clusters": [],
+    "cost_optimization_opportunities": [],
+    "resource_optimization_opportunities": []
+  },
+  "export_data": {
+    "discovery_info": {
+      "discovery_id": "16a399c3-a40a-4fc1-9454-75d3355724a9",
+      "discovery_timestamp": "2025-07-10T09:44:03.280373",
+      "discovery_version": "1.0.0",
+      "clusters": [
+        {
+          "basic_info": {
+            "id": "/subscriptions/5785f902-e9bc-4b4c-8e09-2732a083cdd4/resourcegroups/vnet-aks-rg/providers/Microsoft.ContainerService/managedClusters/cloudstoreyaks",
+            "name": "cloudstoreyaks",
+            "resource_group": "vnet-aks-rg",
+            "location": "centralindia",
+            "kubernetes_version": "1.30.12",
+            "provisioning_state": "Succeeded",
+            "fqdn": "cloudstoreyaks-dns-5fo2hier.hcp.centralindia.azmk8s.io",
+            "node_resource_group": "MC_vnet-aks-rg_cloudstoreyaks_centralindia",
+            "dns_prefix": "cloudstoreyaks-dns",
+            "enable_rbac": true,
+            "created_time": null,
+            "last_modified": null,
+            "tags": {
+              "Name": "cloudstoreyaks"
+            }
+          },
+          "properties": {},
+          "raw_cost_data": {
+            "total": 64.36772371929241,
+            "compute": 0.000718567,
+            "storage": 0.0,
+            "network": 0.0,
+            "monitoring": 64.3670051522924,
+            "other": 0.0,
+            "currency": "USD",
+            "daily_breakdown": [
+              {
+                "date": "2025-06-10",
+                "cost": 1.8439920057821935,
+                "usage": 51.51883432903226,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.28111200578219353
+                },
+                "categories": {
+                  "monitoring": 1.8439920057821935
+                }
+              },
+              {
+                "date": "2025-06-11",
+                "cost": 1.8440002169861935,
+                "usage": 51.51960472903225,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.2811202169861936
+                },
+                "categories": {
+                  "monitoring": 1.8440002169861935
+                }
+              },
+              {
+                "date": "2025-06-12",
+                "cost": 1.8439889834541936,
+                "usage": 51.51920742903226,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.28110898345419355
+                },
+                "categories": {
+                  "monitoring": 1.8439889834541936
+                }
+              },
+              {
+                "date": "2025-06-13",
+                "cost": 1.8440828159061935,
+                "usage": 51.520869729032256,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.28120281590619356
+                },
+                "categories": {
+                  "monitoring": 1.8440828159061935
+                }
+              },
+              {
+                "date": "2025-06-14",
+                "cost": 1.8436504068214195,
+                "usage": 51.51348551290322,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.28077040682141935
+                },
+                "categories": {
+                  "monitoring": 1.8436504068214195
+                }
+              },
+              {
+                "date": "2025-06-15",
+                "cost": 1.8313747366646451,
+                "usage": 51.388438796774196,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.26849473666464513
+                },
+                "categories": {
+                  "monitoring": 1.8313747366646451
+                }
+              },
+              {
+                "date": "2025-06-16",
+                "cost": 1.8318196280984946,
+                "usage": 51.39509424086022,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.26893962809849464
+                },
+                "categories": {
+                  "monitoring": 1.8318196280984946
+                }
+              },
+              {
+                "date": "2025-06-17",
+                "cost": 2.0346588228061937,
+                "usage": 53.27108672903226,
+                "currency": "USD",
+                "services": {
+                  "Container Registry": 0.000718567,
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.4710602558061936
+                },
+                "categories": {
+                  "compute": 0.000718567,
+                  "monitoring": 2.0339402558061934
+                }
+              },
+              {
+                "date": "2025-06-18",
+                "cost": 2.2195296340221935,
+                "usage": 54.98520822903225,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6566496340221936
+                },
+                "categories": {
+                  "monitoring": 2.2195296340221935
+                }
+              },
+              {
+                "date": "2025-06-19",
+                "cost": 2.2201300341741934,
+                "usage": 54.990469629032255,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6572500341741936
+                },
+                "categories": {
+                  "monitoring": 2.2201300341741934
+                }
+              },
+              {
+                "date": "2025-06-20",
+                "cost": 2.2202892811981934,
+                "usage": 54.98493212903226,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6574092811981935
+                },
+                "categories": {
+                  "monitoring": 2.2202892811981934
+                }
+              },
+              {
+                "date": "2025-06-21",
+                "cost": 2.2201080699021936,
+                "usage": 54.982687029032256,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6572280699021936
+                },
+                "categories": {
+                  "monitoring": 2.2201080699021936
+                }
+              },
+              {
+                "date": "2025-06-22",
+                "cost": 2.2175707334741936,
+                "usage": 54.96240172903226,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6546907334741936
+                },
+                "categories": {
+                  "monitoring": 2.2175707334741936
+                }
+              },
+              {
+                "date": "2025-06-23",
+                "cost": 2.2184981928832688,
+                "usage": 54.98121515698925,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6556181928832688
+                },
+                "categories": {
+                  "monitoring": 2.2184981928832688
+                }
+              },
+              {
+                "date": "2025-06-24",
+                "cost": 2.2185505279301934,
+                "usage": 54.981545629032254,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6556705279301935
+                },
+                "categories": {
+                  "monitoring": 2.2185505279301934
+                }
+              },
+              {
+                "date": "2025-06-25",
+                "cost": 2.2163284202581934,
+                "usage": 54.94819772903226,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6534484202581936
+                },
+                "categories": {
+                  "monitoring": 2.2163284202581934
+                }
+              },
+              {
+                "date": "2025-06-26",
+                "cost": 2.2113865420181935,
+                "usage": 54.89993392903226,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6485065420181936
+                },
+                "categories": {
+                  "monitoring": 2.2113865420181935
+                }
+              },
+              {
+                "date": "2025-06-27",
+                "cost": 2.2167229316421935,
+                "usage": 54.94845672903226,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6538429316421935
+                },
+                "categories": {
+                  "monitoring": 2.2167229316421935
+                }
+              },
+              {
+                "date": "2025-06-28",
+                "cost": 2.215930989421419,
+                "usage": 54.938128512903226,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6530509894214194
+                },
+                "categories": {
+                  "monitoring": 2.215930989421419
+                }
+              },
+              {
+                "date": "2025-06-29",
+                "cost": 2.2155262400166453,
+                "usage": 54.93119329677419,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6526462400166452
+                },
+                "categories": {
+                  "monitoring": 2.2155262400166453
+                }
+              },
+              {
+                "date": "2025-06-30",
+                "cost": 2.21568893940357,
+                "usage": 54.93428366881721,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6528089394035699
+                },
+                "categories": {
+                  "monitoring": 2.21568893940357
+                }
+              },
+              {
+                "date": "2025-07-01",
+                "cost": 2.2164292696301935,
+                "usage": 54.947268229032254,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6535492696301936
+                },
+                "categories": {
+                  "monitoring": 2.2164292696301935
+                }
+              },
+              {
+                "date": "2025-07-02",
+                "cost": 2.2158963280621933,
+                "usage": 54.941215529032256,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6530163280621936
+                },
+                "categories": {
+                  "monitoring": 2.2158963280621933
+                }
+              },
+              {
+                "date": "2025-07-03",
+                "cost": 2.2162286685421932,
+                "usage": 54.944047529032254,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6533486685421935
+                },
+                "categories": {
+                  "monitoring": 2.2162286685421932
+                }
+              },
+              {
+                "date": "2025-07-04",
+                "cost": 2.2167605918781934,
+                "usage": 54.94901622903225,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6538805918781936
+                },
+                "categories": {
+                  "monitoring": 2.2167605918781934
+                }
+              },
+              {
+                "date": "2025-07-05",
+                "cost": 2.2165766432421936,
+                "usage": 54.94694322903226,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6536966432421936
+                },
+                "categories": {
+                  "monitoring": 2.2165766432421936
+                }
+              },
+              {
+                "date": "2025-07-06",
+                "cost": 2.2226634178981937,
+                "usage": 55.00948952903226,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6597834178981936
+                },
+                "categories": {
+                  "monitoring": 2.2226634178981937
+                }
+              },
+              {
+                "date": "2025-07-07",
+                "cost": 2.2235606474341933,
+                "usage": 55.03091642903226,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6606806474341935
+                },
+                "categories": {
+                  "monitoring": 2.2235606474341933
+                }
+              },
+              {
+                "date": "2025-07-08",
+                "cost": 2.2236007887861935,
+                "usage": 55.017793629032255,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6607207887861936
+                },
+                "categories": {
+                  "monitoring": 2.2236007887861935
+                }
+              },
+              {
+                "date": "2025-07-09",
+                "cost": 2.2236502777581935,
+                "usage": 55.01817882903226,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6607702777581935
+                },
+                "categories": {
+                  "monitoring": 2.2236502777581935
+                }
+              },
+              {
+                "date": "2025-07-10",
+                "cost": 0.6485289331964732,
+                "usage": 16.047016904301074,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 0.45584,
+                  "Azure Monitor": 0.19268893319647312
+                },
+                "categories": {
+                  "monitoring": 0.6485289331964732
+                }
+              }
+            ],
+            "by_service": {
+              "Azure Grafana Service": {
+                "cost": 47.342240000000004,
+                "usage_quantity": 1454.0,
+                "currency": "USD",
+                "resource_types": [
+                  "microsoft.dashboard/grafana"
+                ]
+              },
+              "Azure Monitor": {
+                "cost": 17.024765152292392,
+                "usage_quantity": 184.9608019580645,
+                "currency": "USD",
+                "resource_types": [
+                  "microsoft.insights/metricalerts",
+                  "microsoft.monitor/accounts"
+                ]
+              },
+              "Container Registry": {
+                "cost": 0.000718567,
+                "usage_quantity": 0.006359,
+                "currency": "USD",
+                "resource_types": [
+                  "microsoft.containerregistry/registries"
+                ]
+              }
+            },
+            "cost_trend": "decreasing",
+            "allocation_percentage": 0.0
+          },
+          "node_pools": [
+            {
+              "config": {
+                "name": "agentpool",
+                "vm_size": "Standard_D2s_v3",
+                "os_type": "Linux",
+                "os_disk_size_gb": 128,
+                "count": 2,
+                "min_count": 1,
+                "max_count": 2,
+                "auto_scaling_enabled": true,
+                "mode": "System",
+                "orchestrator_version": "1.30.12",
+                "provisioning_state": "Succeeded",
+                "power_state": "Running",
+                "max_pods": 110,
+                "os_disk_type": "Managed",
+                "scale_set_priority": null,
+                "spot_max_price": null,
+                "node_taints": [],
+                "node_labels": {},
+                "availability_zones": [],
+                "upgrade_settings": {
+                  "max_surge": "10%"
+                },
+                "tags": {
+                  "Name": "cloudstoreyaks"
+                }
+              },
+              "scaling": {
+                "current_count": 2,
+                "min_count": 1,
+                "max_count": 2,
+                "auto_scaling_enabled": true,
+                "scaling_history": []
+              },
+              "cost_data": {
+                "total": 64.36772371929241,
+                "compute": 0.000718567,
+                "storage": 0.0,
+                "network": 0.0,
+                "monitoring": 64.3670051522924,
+                "other": 0.0,
+                "currency": "USD",
+                "daily_breakdown": [],
+                "by_service": {},
+                "cost_trend": "stable",
+                "allocation_percentage": 100.0
+              },
+              "nodes": []
+            }
+          ],
+          "namespaces": [],
+          "workloads": [],
+          "services": [],
+          "storage": [],
+          "ingresses": [],
+          "network_resources": [],
+          "azure_resources": [],
+          "cluster_summary": {
+            "total_nodes": 0,
+            "total_pods": 0,
+            "total_workloads": 0,
+            "cluster_health": "unknown",
+            "network_profile": {
+              "network_plugin": "azure",
+              "service_cidr": "10.0.0.0/16",
+              "dns_service_ip": "10.0.0.10",
+              "pod_cidr": "10.244.0.0/16",
+              "load_balancer_sku": "Standard"
+            },
+            "addon_profiles": {
+              "azureKeyvaultSecretsProvider": {
+                "enabled": true,
+                "config": {
+                  "enableSecretRotation": "false",
+                  "rotationPollInterval": "2m"
+                }
+              },
+              "azurepolicy": {
+                "enabled": true,
+                "config": null
+              },
+              "omsAgent": {
+                "enabled": true,
+                "config": {
+                  "logAnalyticsWorkspaceResourceID": "/subscriptions/5785f902-e9bc-4b4c-8e09-2732a083cdd4/resourceGroups/INCDCXS00NRSG01/providers/Microsoft.OperationalInsights/workspaces/INCDCXS00NLAW01",
+                  "useAADAuth": "true"
+                }
+              }
+            },
+            "sku": {
+              "name": "Base",
+              "tier": "Free"
+            },
+            "overall_utilization": {
+              "cpu_usage": 0.0,
+              "memory_usage": 0.0,
+              "storage_usage": 0.0,
+              "network_in": 0.0,
+              "network_out": 0.0,
+              "peak_cpu": 0.0,
+              "peak_memory": 0.0,
+              "avg_cpu": 0.0,
+              "avg_memory": 0.0,
+              "collection_timestamp": "2025-07-10 09:44:03.280609"
+            }
+          }
+        }
+      ],
+      "totals": {
+        "aggregated_costs": {
+          "total": 64.36772371929241,
+          "compute": 0.0,
+          "storage": 0.0,
+          "network": 0.0,
+          "monitoring": 0.0,
+          "other": 0.0,
+          "currency": "USD",
+          "daily_breakdown": [],
+          "by_service": {},
+          "cost_trend": "stable",
+          "allocation_percentage": 0.0
+        },
+        "counts": {
+          "total_clusters": 1,
+          "total_node_pools": 1,
+          "total_nodes": 0,
+          "total_namespaces": 0,
+          "total_workloads": 0,
+          "total_pods": 0,
+          "total_services": 0,
+          "total_storage_volumes": 0,
+          "total_ingresses": 0,
+          "total_network_resources": 0,
+          "total_azure_resources": 0,
+          "total_resources": 2
+        },
+        "utilization": {
+          "cpu_usage": 0.0,
+          "memory_usage": 0.0,
+          "storage_usage": 0.0,
+          "network_in": 0.0,
+          "network_out": 0.0,
+          "peak_cpu": 0.0,
+          "peak_memory": 0.0,
+          "avg_cpu": 0.0,
+          "avg_memory": 0.0,
+          "collection_timestamp": "2025-07-10 09:44:03.280465"
+        },
+        "cost_by_cluster": {
+          "cloudstoreyaks": {
+            "total": 64.36772371929241,
+            "compute": 0.000718567,
+            "storage": 0.0,
+            "network": 0.0,
+            "monitoring": 64.3670051522924,
+            "other": 0.0,
+            "currency": "USD",
+            "daily_breakdown": [
+              {
+                "date": "2025-06-10",
+                "cost": 1.8439920057821935,
+                "usage": 51.51883432903226,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.28111200578219353
+                },
+                "categories": {
+                  "monitoring": 1.8439920057821935
+                }
+              },
+              {
+                "date": "2025-06-11",
+                "cost": 1.8440002169861935,
+                "usage": 51.51960472903225,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.2811202169861936
+                },
+                "categories": {
+                  "monitoring": 1.8440002169861935
+                }
+              },
+              {
+                "date": "2025-06-12",
+                "cost": 1.8439889834541936,
+                "usage": 51.51920742903226,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.28110898345419355
+                },
+                "categories": {
+                  "monitoring": 1.8439889834541936
+                }
+              },
+              {
+                "date": "2025-06-13",
+                "cost": 1.8440828159061935,
+                "usage": 51.520869729032256,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.28120281590619356
+                },
+                "categories": {
+                  "monitoring": 1.8440828159061935
+                }
+              },
+              {
+                "date": "2025-06-14",
+                "cost": 1.8436504068214195,
+                "usage": 51.51348551290322,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.28077040682141935
+                },
+                "categories": {
+                  "monitoring": 1.8436504068214195
+                }
+              },
+              {
+                "date": "2025-06-15",
+                "cost": 1.8313747366646451,
+                "usage": 51.388438796774196,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.26849473666464513
+                },
+                "categories": {
+                  "monitoring": 1.8313747366646451
+                }
+              },
+              {
+                "date": "2025-06-16",
+                "cost": 1.8318196280984946,
+                "usage": 51.39509424086022,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.26893962809849464
+                },
+                "categories": {
+                  "monitoring": 1.8318196280984946
+                }
+              },
+              {
+                "date": "2025-06-17",
+                "cost": 2.0346588228061937,
+                "usage": 53.27108672903226,
+                "currency": "USD",
+                "services": {
+                  "Container Registry": 0.000718567,
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.4710602558061936
+                },
+                "categories": {
+                  "compute": 0.000718567,
+                  "monitoring": 2.0339402558061934
+                }
+              },
+              {
+                "date": "2025-06-18",
+                "cost": 2.2195296340221935,
+                "usage": 54.98520822903225,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6566496340221936
+                },
+                "categories": {
+                  "monitoring": 2.2195296340221935
+                }
+              },
+              {
+                "date": "2025-06-19",
+                "cost": 2.2201300341741934,
+                "usage": 54.990469629032255,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6572500341741936
+                },
+                "categories": {
+                  "monitoring": 2.2201300341741934
+                }
+              },
+              {
+                "date": "2025-06-20",
+                "cost": 2.2202892811981934,
+                "usage": 54.98493212903226,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6574092811981935
+                },
+                "categories": {
+                  "monitoring": 2.2202892811981934
+                }
+              },
+              {
+                "date": "2025-06-21",
+                "cost": 2.2201080699021936,
+                "usage": 54.982687029032256,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6572280699021936
+                },
+                "categories": {
+                  "monitoring": 2.2201080699021936
+                }
+              },
+              {
+                "date": "2025-06-22",
+                "cost": 2.2175707334741936,
+                "usage": 54.96240172903226,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6546907334741936
+                },
+                "categories": {
+                  "monitoring": 2.2175707334741936
+                }
+              },
+              {
+                "date": "2025-06-23",
+                "cost": 2.2184981928832688,
+                "usage": 54.98121515698925,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6556181928832688
+                },
+                "categories": {
+                  "monitoring": 2.2184981928832688
+                }
+              },
+              {
+                "date": "2025-06-24",
+                "cost": 2.2185505279301934,
+                "usage": 54.981545629032254,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6556705279301935
+                },
+                "categories": {
+                  "monitoring": 2.2185505279301934
+                }
+              },
+              {
+                "date": "2025-06-25",
+                "cost": 2.2163284202581934,
+                "usage": 54.94819772903226,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6534484202581936
+                },
+                "categories": {
+                  "monitoring": 2.2163284202581934
+                }
+              },
+              {
+                "date": "2025-06-26",
+                "cost": 2.2113865420181935,
+                "usage": 54.89993392903226,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6485065420181936
+                },
+                "categories": {
+                  "monitoring": 2.2113865420181935
+                }
+              },
+              {
+                "date": "2025-06-27",
+                "cost": 2.2167229316421935,
+                "usage": 54.94845672903226,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6538429316421935
+                },
+                "categories": {
+                  "monitoring": 2.2167229316421935
+                }
+              },
+              {
+                "date": "2025-06-28",
+                "cost": 2.215930989421419,
+                "usage": 54.938128512903226,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6530509894214194
+                },
+                "categories": {
+                  "monitoring": 2.215930989421419
+                }
+              },
+              {
+                "date": "2025-06-29",
+                "cost": 2.2155262400166453,
+                "usage": 54.93119329677419,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6526462400166452
+                },
+                "categories": {
+                  "monitoring": 2.2155262400166453
+                }
+              },
+              {
+                "date": "2025-06-30",
+                "cost": 2.21568893940357,
+                "usage": 54.93428366881721,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6528089394035699
+                },
+                "categories": {
+                  "monitoring": 2.21568893940357
+                }
+              },
+              {
+                "date": "2025-07-01",
+                "cost": 2.2164292696301935,
+                "usage": 54.947268229032254,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6535492696301936
+                },
+                "categories": {
+                  "monitoring": 2.2164292696301935
+                }
+              },
+              {
+                "date": "2025-07-02",
+                "cost": 2.2158963280621933,
+                "usage": 54.941215529032256,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6530163280621936
+                },
+                "categories": {
+                  "monitoring": 2.2158963280621933
+                }
+              },
+              {
+                "date": "2025-07-03",
+                "cost": 2.2162286685421932,
+                "usage": 54.944047529032254,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6533486685421935
+                },
+                "categories": {
+                  "monitoring": 2.2162286685421932
+                }
+              },
+              {
+                "date": "2025-07-04",
+                "cost": 2.2167605918781934,
+                "usage": 54.94901622903225,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6538805918781936
+                },
+                "categories": {
+                  "monitoring": 2.2167605918781934
+                }
+              },
+              {
+                "date": "2025-07-05",
+                "cost": 2.2165766432421936,
+                "usage": 54.94694322903226,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6536966432421936
+                },
+                "categories": {
+                  "monitoring": 2.2165766432421936
+                }
+              },
+              {
+                "date": "2025-07-06",
+                "cost": 2.2226634178981937,
+                "usage": 55.00948952903226,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6597834178981936
+                },
+                "categories": {
+                  "monitoring": 2.2226634178981937
+                }
+              },
+              {
+                "date": "2025-07-07",
+                "cost": 2.2235606474341933,
+                "usage": 55.03091642903226,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6606806474341935
+                },
+                "categories": {
+                  "monitoring": 2.2235606474341933
+                }
+              },
+              {
+                "date": "2025-07-08",
+                "cost": 2.2236007887861935,
+                "usage": 55.017793629032255,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6607207887861936
+                },
+                "categories": {
+                  "monitoring": 2.2236007887861935
+                }
+              },
+              {
+                "date": "2025-07-09",
+                "cost": 2.2236502777581935,
+                "usage": 55.01817882903226,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 1.56288,
+                  "Azure Monitor": 0.6607702777581935
+                },
+                "categories": {
+                  "monitoring": 2.2236502777581935
+                }
+              },
+              {
+                "date": "2025-07-10",
+                "cost": 0.6485289331964732,
+                "usage": 16.047016904301074,
+                "currency": "USD",
+                "services": {
+                  "Azure Grafana Service": 0.45584,
+                  "Azure Monitor": 0.19268893319647312
+                },
+                "categories": {
+                  "monitoring": 0.6485289331964732
+                }
+              }
+            ],
+            "by_service": {
+              "Azure Grafana Service": {
+                "cost": 47.342240000000004,
+                "usage_quantity": 1454.0,
+                "currency": "USD",
+                "resource_types": [
+                  "microsoft.dashboard/grafana"
+                ]
+              },
+              "Azure Monitor": {
+                "cost": 17.024765152292392,
+                "usage_quantity": 184.9608019580645,
+                "currency": "USD",
+                "resource_types": [
+                  "microsoft.insights/metricalerts",
+                  "microsoft.monitor/accounts"
+                ]
+              },
+              "Container Registry": {
+                "cost": 0.000718567,
+                "usage_quantity": 0.006359,
+                "currency": "USD",
+                "resource_types": [
+                  "microsoft.containerregistry/registries"
+                ]
+              }
+            },
+            "cost_trend": "decreasing",
+            "allocation_percentage": 0.0
+          }
+        },
+        "cost_by_namespace": {},
+        "cost_by_resource_type": {},
+        "utilization_by_cluster": {},
+        "discovery_metadata": {
+          "discovery_timestamp": "2025-07-10T09:43:51.614917+00:00",
+          "discovery_duration_seconds": 11.664007,
+          "successful_discoveries": 3,
+          "failed_discoveries": 0,
+          "discovery_success_rate": 100.0,
+          "warnings": [],
+          "errors": []
+        }
+      }
+    }
+  }
+}
