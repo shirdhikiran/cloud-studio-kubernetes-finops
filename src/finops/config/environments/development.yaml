@@ -15,13 +15,17 @@ kubernetes:
   namespace: "default"
 
 discovery:
-  interval_hours: 1
-  parallel_workers: 2
-  timeout_seconds: 120
+  cost_analysis_days: 30
+  metrics_hours: 24
+  include_recommendations: true
+  include_detailed_metrics: true
+  include_cost_allocation: true
+  parallel_workers: 5
+  timeout_seconds: 600
 
 storage:
   backend: "file"
-  base_path: "./data/development"
+  base_path: "./phase1_discovery_data"
 
 api:
   host: "localhost"

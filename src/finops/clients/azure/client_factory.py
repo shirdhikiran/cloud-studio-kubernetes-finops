@@ -9,7 +9,7 @@ from finops.core.exceptions import ClientConnectionException, ConfigurationExcep
 from .aks_client import AKSClient
 from .cost_client import CostClient
 from .monitor_client import MonitorClient
-from .resource_client import ResourceClient
+
 
 logger = structlog.get_logger(__name__)
 
@@ -81,22 +81,14 @@ class AzureClientFactory:
             config=self.config
         )
     
-    def create_resource_client(self) -> ResourceClient:
-        """Create Resource Management client."""
-        credential = self._get_credential()
-        return ResourceClient(
-            credential=credential,
-            subscription_id=self.subscription_id,
-            config=self.config
-        )
+    
     
     async def create_all_clients(self) -> Dict[str, Any]:
         """Create all Azure clients."""
         clients = {
             "aks": self.create_aks_client(),
             "cost": self.create_cost_client(),
-            "monitor": self.create_monitor_client(),
-            "resource": self.create_resource_client()
+            "monitor": self.create_monitor_client()
         }
         
         # Connect all clients
