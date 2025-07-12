@@ -54,14 +54,14 @@ class DiscoveryService(BaseDiscoveryService):
             if self.include_recommendations:
                 discovery_data = await self._add_discovery_insights(discovery_data)
             
-            # Add discovery metadata
-            discovery_data["discovery_metadata"] = {
-                "discovery_phase": "Phase 1 - Complete Discovery",
-                "service_version": "1.0.0",
-                "data_quality": self._assess_data_quality(discovery_data),
-                "discovery_completeness": self._calculate_completeness(discovery_data),
-                "next_recommended_actions": self._get_next_actions(discovery_data)
-            }
+            # # Add discovery metadata
+            # discovery_data["discovery_metadata"] = {
+            #     "discovery_phase": "Phase 1 - Complete Discovery",
+            #     "service_version": "1.0.0",
+            #     "data_quality": self._assess_data_quality(discovery_data),
+            #     "discovery_completeness": self._calculate_completeness(discovery_data),
+            #     "next_recommended_actions": self._get_next_actions(discovery_data)
+            # }
             
             self.logger.info(
                 "Comprehensive discovery completed",

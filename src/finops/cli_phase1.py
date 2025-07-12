@@ -13,6 +13,7 @@ from finops.core.utils import setup_logging
 from finops.discovery.discovery_orchestrator import DiscoveryOrchestrator
 from finops.data.storage.file_storage import FileStorage
 
+
 logger = structlog.get_logger(__name__)
 
 

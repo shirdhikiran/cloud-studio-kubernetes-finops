@@ -1,4 +1,4 @@
-"""Azure Cost Management client aligned with cost discovery service requirements."""
+"""Enhanced Azure Cost Management client with proper resource group cost isolation."""
 
 from typing import Dict, Any, List, Optional, Union
 from datetime import datetime, timedelta, timezone
@@ -19,7 +19,7 @@ logger = structlog.get_logger(__name__)
 
 
 class CostClient(BaseClient):
-    """Client for Azure Cost Management operations with flexible method signatures."""
+    """Enhanced client for Azure Cost Management with proper resource group isolation."""
     
     def __init__(self, credential, subscription_id: str, config: Dict[str, Any]):
         super().__init__(config, "CostClient")
@@ -79,26 +79,17 @@ class CostClient(BaseClient):
             return False
     
     @retry_with_backoff(max_retries=3)
-    async def get_resource_costs(self, 
-                               resource_group: Optional[str] = None,
-                               cluster_name: Optional[str] = None,
-                               subscription_id: Optional[str] = None,
-                               start_date: Optional[datetime] = None,
-                               end_date: Optional[datetime] = None,
-                               **kwargs) -> Dict[str, Any]:
+    async def get_resource_group_costs_isolated(self, 
+                                              resource_group: str,
+                                              start_date: Optional[datetime] = None,
+                                              end_date: Optional[datetime] = None,
+                                              granularity: GranularityType = GranularityType.DAILY) -> Dict[str, Any]:
         """
-        Get resource costs with flexible parameters.
-        
-        This method supports multiple parameter combinations:
-        - get_resource_costs(resource_group="rg-name", start_date=..., end_date=...)
-        - get_resource_costs(subscription_id="sub-id", resource_group="rg-name", ...)
-        - get_resource_costs(resource_group="rg-name", cluster_name="cluster", ...)
+        Get completely isolated costs for a specific resource group only.
+        This ensures no cross-contamination from other resource groups.
         """
         if not self._connected:
             raise DiscoveryException("CostManagement", "Client not connected")
-        
-        # Use provided subscription_id or fallback to instance default
-        sub_id = subscription_id or self.subscription_id
         
         # Default to last 30 days if dates not provided
         if not end_date:
@@ -106,39 +97,126 @@ class CostClient(BaseClient):
         if not start_date:
             start_date = end_date - timedelta(days=30)
         
-        scope = f"/subscriptions/{sub_id}"
+        # Use resource group scope for complete isolation
+        scope = f"/subscriptions/{self.subscription_id}/resourceGroups/{resource_group}"
         
         try:
-            # Build filter conditions
-            filter_conditions = []
-            
-            if resource_group:
-                filter_conditions.append(
-                    QueryComparisonExpression(
-                        name="ResourceGroupName",
-                        operator=QueryOperatorType.IN,
-                        values=[resource_group]
-                    )
+            # Query with strict resource group filtering
+            query_definition = QueryDefinition(
+                type="Usage",
+                timeframe=TimeframeType.CUSTOM,
+                time_period=QueryTimePeriod(
+                    from_property=start_date,
+                    to=end_date
+                ),
+                dataset=QueryDataset(
+                    granularity=granularity,
+                    aggregation={
+                        "totalCost": QueryAggregation(name="PreTaxCost", function="Sum"),
+                        "usageQuantity": QueryAggregation(name="UsageQuantity", function="Sum")
+                    },
+                    grouping=[
+                        QueryGrouping(type="Dimension", name="ResourceType"),
+                        QueryGrouping(type="Dimension", name="ServiceName"),
+                        QueryGrouping(type="Dimension", name="MeterCategory"),
+                        QueryGrouping(type="Dimension", name="ResourceGroupName"),
+                        QueryGrouping(type="Dimension", name="ResourceLocation"),
+                        QueryGrouping(type="Dimension", name="ConsumedService"),
+                        QueryGrouping(type="Dimension", name="ResourceId")
+                    ]
                 )
+            )
             
-            # If cluster_name is provided, we can filter by resources containing the cluster name
-            # or use tags if available
-            if cluster_name:
-                # This would work if resources are tagged with cluster name
-                # For now, we'll include it in the response metadata
-                pass
+            self.logger.info(f"Querying costs for resource group: {resource_group}", 
+                           start_date=start_date.isoformat(), 
+                           end_date=end_date.isoformat())
             
-            # Combine filters if multiple conditions
-            filter_expression = None
-            if filter_conditions:
-                if len(filter_conditions) == 1:
-                    filter_expression = QueryFilter(dimensions=filter_conditions[0])
-                else:
-                    # For multiple conditions, we'd need to use 'and_' operator
-                    filter_expression = QueryFilter(
-                        and_=[QueryFilter(dimensions=condition) for condition in filter_conditions]
-                    )
+            response = self._client.query.usage(scope, query_definition)
             
+            # Process with enhanced isolation
+            processed_costs = await self._process_isolated_cost_response(response, resource_group)
+            
+            # Add metadata about the query
+            processed_costs['query_metadata'] = {
+                'subscription_id': self.subscription_id,
+                'resource_group': resource_group,
+                'start_date': start_date.isoformat(),
+                'end_date': end_date.isoformat(),
+                'scope': scope,
+                'granularity': granularity.value if hasattr(granularity, 'value') else str(granularity),
+                'isolation_method': 'resource_group_scope'
+            }
+            
+            return processed_costs
+            
+        except AzureError as e:
+            self.logger.error("Failed to get isolated resource group costs", 
+                            resource_group=resource_group, error=str(e))
+            raise DiscoveryException("CostManagement", f"Failed to get costs for {resource_group}: {e}")
+    
+    @retry_with_backoff(max_retries=3)
+    async def get_subscription_costs_by_resource_group(self,
+                                                     start_date: Optional[datetime] = None,
+                                                     end_date: Optional[datetime] = None) -> Dict[str, Any]:
+        """Get all costs in subscription broken down by resource group."""
+        if not self._connected:
+            raise DiscoveryException("CostManagement", "Client not connected")
+        
+        # Default to last 30 days if dates not provided
+        if not end_date:
+            end_date = datetime.now(timezone.utc)
+        if not start_date:
+            start_date = end_date - timedelta(days=30)
+        
+        scope = f"/subscriptions/{self.subscription_id}"
+        
+        try:
+            query_definition = QueryDefinition(
+                type="Usage",
+                timeframe=TimeframeType.CUSTOM,
+                time_period=QueryTimePeriod(
+                    from_property=start_date,
+                    to=end_date
+                ),
+                dataset=QueryDataset(
+                    granularity=GranularityType.NONE,
+                    aggregation={
+                        "totalCost": QueryAggregation(name="PreTaxCost", function="Sum"),
+                        "usageQuantity": QueryAggregation(name="UsageQuantity", function="Sum")
+                    },
+                    grouping=[
+                        QueryGrouping(type="Dimension", name="ResourceGroupName"),
+                        QueryGrouping(type="Dimension", name="ServiceName"),
+                        QueryGrouping(type="Dimension", name="ResourceType"),
+                        QueryGrouping(type="Dimension", name="MeterCategory")
+                    ]
+                )
+            )
+            
+            response = self._client.query.usage(scope, query_definition)
+            return await self._process_subscription_cost_breakdown(response)
+            
+        except AzureError as e:
+            self.logger.error("Failed to get subscription costs by resource group", error=str(e))
+            raise DiscoveryException("CostManagement", f"Failed to get subscription cost breakdown: {e}")
+    
+    @retry_with_backoff(max_retries=3)
+    async def get_detailed_resource_costs(self,
+                                        resource_group: str,
+                                        start_date: Optional[datetime] = None,
+                                        end_date: Optional[datetime] = None) -> Dict[str, Any]:
+        """Get detailed per-resource costs within a resource group."""
+        if not self._connected:
+            raise DiscoveryException("CostManagement", "Client not connected")
+        
+        if not end_date:
+            end_date = datetime.now(timezone.utc)
+        if not start_date:
+            start_date = end_date - timedelta(days=30)
+        
+        scope = f"/subscriptions/{self.subscription_id}/resourceGroups/{resource_group}"
+        
+        try:
             query_definition = QueryDefinition(
                 type="Usage",
                 timeframe=TimeframeType.CUSTOM,
@@ -153,159 +231,24 @@ class CostClient(BaseClient):
                         "usageQuantity": QueryAggregation(name="UsageQuantity", function="Sum")
                     },
                     grouping=[
+                        QueryGrouping(type="Dimension", name="ResourceId"),
                         QueryGrouping(type="Dimension", name="ResourceType"),
                         QueryGrouping(type="Dimension", name="ServiceName"),
-                        QueryGrouping(type="Dimension", name="MeterCategory"),
-                        QueryGrouping(type="Dimension", name="ResourceGroupName")
-                    ],
-                    filter=filter_expression
-                )
-            )
-            
-            response = self._client.query.usage(scope, query_definition)
-            
-            # Process and return standardized response
-            processed_costs = await self._process_cost_response(response)
-            
-            # Add metadata about the query
-            processed_costs['query_metadata'] = {
-                'subscription_id': sub_id,
-                'resource_group': resource_group,
-                'cluster_name': cluster_name,
-                'start_date': start_date.isoformat(),
-                'end_date': end_date.isoformat(),
-                'scope': scope
-            }
-            
-            return processed_costs
-            
-        except AzureError as e:
-            self.logger.error("Failed to get resource costs", error=str(e))
-            raise DiscoveryException("CostManagement", f"Failed to get resource costs: {e}")
-        except Exception as e:
-            self.logger.error("Unexpected error getting resource costs", error=str(e))
-            # Return fallback structure instead of failing
-            return self._get_fallback_cost_structure(resource_group, cluster_name, start_date, end_date)
-    
-    @retry_with_backoff(max_retries=3)
-    async def query_costs(self,
-                         subscription_id: Optional[str] = None,
-                         resource_group: Optional[str] = None,
-                         start_date: Optional[datetime] = None,
-                         end_date: Optional[datetime] = None,
-                         granularity: str = "Daily",
-                         **kwargs) -> Dict[str, Any]:
-        """
-        Alternative method name for querying costs.
-        Maps to get_resource_costs for compatibility.
-        """
-        return await self.get_resource_costs(
-            subscription_id=subscription_id,
-            resource_group=resource_group,
-            start_date=start_date,
-            end_date=end_date,
-            **kwargs
-        )
-    
-    @retry_with_backoff(max_retries=3)
-    async def get_cost_data(self,
-                           scope: Optional[str] = None,
-                           filters: Optional[Dict[str, Any]] = None,
-                           **kwargs) -> Dict[str, Any]:
-        """
-        Generic cost data method that can be called by discovery services.
-        """
-        # Extract common parameters from kwargs
-        resource_group = kwargs.get('resource_group') or (filters and filters.get('resource_group'))
-        start_date = kwargs.get('start_date') or (filters and filters.get('start_date'))
-        end_date = kwargs.get('end_date') or (filters and filters.get('end_date'))
-        
-        return await self.get_resource_costs(
-            resource_group=resource_group,
-            start_date=start_date,
-            end_date=end_date,
-            **kwargs
-        )
-    
-    @retry_with_backoff(max_retries=3)
-    async def get_cost_by_service(self,
-                                resource_group: Optional[str] = None,
-                                start_date: Optional[datetime] = None,
-                                end_date: Optional[datetime] = None,
-                                **kwargs) -> Dict[str, Any]:
-        """Get costs broken down by service."""
-        if not self._connected:
-            raise DiscoveryException("CostManagement", "Client not connected")
-        
-        # Default to last 30 days
-        if not end_date:
-            end_date = datetime.now(timezone.utc)
-        if not start_date:
-            start_date = end_date - timedelta(days=30)
-        
-        scope = f"/subscriptions/{self.subscription_id}"
-        
-        try:
-            filter_expression = None
-            if resource_group:
-                filter_expression = QueryFilter(
-                    dimensions=QueryComparisonExpression(
-                        name="ResourceGroupName",
-                        operator=QueryOperatorType.IN,
-                        values=[resource_group]
-                    )
-                )
-            
-            query_definition = QueryDefinition(
-                type="Usage",
-                timeframe=TimeframeType.CUSTOM,
-                time_period=QueryTimePeriod(
-                    from_property=start_date,
-                    to=end_date
-                ),
-                dataset=QueryDataset(
-                    granularity=GranularityType.NONE,
-                    aggregation={
-                        "totalCost": QueryAggregation(name="PreTaxCost", function="Sum")
-                    },
-                    grouping=[
-                        QueryGrouping(type="Dimension", name="ServiceName"),
                         QueryGrouping(type="Dimension", name="MeterCategory")
-                    ],
-                    filter=filter_expression
+                    ]
                 )
             )
             
             response = self._client.query.usage(scope, query_definition)
-            return await self._process_service_cost_response(response)
+            return await self._process_detailed_resource_costs(response, resource_group)
             
         except AzureError as e:
-            raise DiscoveryException("CostManagement", f"Failed to get costs by service: {e}")
+            self.logger.error("Failed to get detailed resource costs", 
+                            resource_group=resource_group, error=str(e))
+            raise DiscoveryException("CostManagement", f"Failed to get detailed costs for {resource_group}: {e}")
     
-    async def get_cost_forecast(self,
-                              resource_group: Optional[str] = None,
-                              days_ahead: int = 30,
-                              **kwargs) -> Dict[str, Any]:
-        """Get cost forecasting data."""
-        # This would use Azure's forecasting API when available
-        # For now, return a basic forecast structure
-        return {
-            'forecast_period_days': days_ahead,
-            'estimated_cost': 0.0,
-            'confidence': 'low',
-            'method': 'not_implemented',
-            'note': 'Cost forecasting requires Azure Cost Management forecasting API'
-        }
-    
-    async def get_cost_anomalies(self,
-                               resource_group: Optional[str] = None,
-                               **kwargs) -> List[Dict[str, Any]]:
-        """Get cost anomalies and unusual spending patterns."""
-        # This would use Azure's anomaly detection when available
-        return []
-    
-    async def _process_cost_response(self, response) -> Dict[str, Any]:
-        """Process cost API response into standardized format."""
+    async def _process_isolated_cost_response(self, response, resource_group: str) -> Dict[str, Any]:
+        """Process cost API response with strict isolation validation."""
         costs = {
             'total': 0.0,
             'compute': 0.0,
@@ -318,7 +261,13 @@ class CostClient(BaseClient):
             'by_service': {},
             'by_resource_type': {},
             'by_meter_category': {},
-            'source': 'azure_cost_management_api'
+            'by_resource_id': {},
+            'resource_group_validation': {
+                'target_resource_group': resource_group,
+                'other_resource_groups_found': set(),
+                'isolation_validated': True
+            },
+            'source': 'azure_cost_management_api_isolated'
         }
         
         if not hasattr(response, 'rows') or not response.rows:
@@ -326,73 +275,113 @@ class CostClient(BaseClient):
             return costs
         
         daily_costs = {}
+        resource_validation = costs['resource_group_validation']
         
         for row in response.rows:
             try:
-                if len(row) >= 6:
+                if len(row) >= 7:  # Updated for correct number of columns
                     cost = float(row[0]) if row[0] is not None else 0.0
                     usage_quantity = float(row[1]) if row[1] is not None else 0.0
                     usage_date_raw = row[2] if row[2] is not None else None
                     resource_type = row[3] if row[3] is not None else "Unknown"
                     service_name = row[4] if row[4] is not None else "Unknown"
                     meter_category = row[5] if row[5] is not None else "Unknown"
-                    resource_group_name = row[6] if len(row) > 6 and row[6] is not None else "Unknown"
-                    currency = row[7] if len(row) > 7 and row[7] is not None else "USD"
+                    returned_rg = row[6] if row[6] is not None else "Unknown"
+                    location = row[7] if len(row) > 7 and row[7] is not None else "Unknown"
+                    consumed_service = row[8] if len(row) > 8 and row[8] is not None else "Unknown"
+                    resource_id = row[9] if len(row) > 9 and row[9] is not None else "Unknown"
                     
-                    # Parse date (Azure returns dates in YYYYMMDD format as integers)
-                    usage_date = None
-                    if usage_date_raw:
-                        try:
-                            if isinstance(usage_date_raw, (int, float)):
-                                date_str = str(int(usage_date_raw))
-                                if len(date_str) == 8:
-                                    year, month, day = int(date_str[:4]), int(date_str[4:6]), int(date_str[6:8])
-                                    usage_date = datetime(year, month, day)
-                            elif isinstance(usage_date_raw, str) and len(usage_date_raw) == 8:
-                                usage_date = datetime.strptime(usage_date_raw, '%Y%m%d')
-                            else:
-                                usage_date = usage_date_raw if hasattr(usage_date_raw, 'strftime') else None
-                        except (ValueError, TypeError):
-                            self.logger.debug(f"Could not parse date: {usage_date_raw}")
+                    # Validate resource group isolation
+                    if returned_rg != resource_group and returned_rg != "Unknown":
+                        resource_validation['other_resource_groups_found'].add(returned_rg)
+                        resource_validation['isolation_validated'] = False
+                        self.logger.warning(f"Found costs from different resource group: {returned_rg}")
+                        continue  # Skip this row as it's not from our target RG
+                    
+                    # Parse date
+                    usage_date = self._parse_usage_date(usage_date_raw)
                     
                     costs['total'] += cost
                     
-                    # Enhanced categorization based on service and meter category
-                    self._categorize_cost(costs, cost, service_name, meter_category, resource_type)
+                    # Enhanced categorization
+                    self._categorize_cost_enhanced(costs, cost, service_name, meter_category, 
+                                                 resource_type, consumed_service)
                     
-                    # Group by service
+                    # Group by service with more details
                     if service_name not in costs['by_service']:
                         costs['by_service'][service_name] = {
                             'cost': 0.0,
                             'usage_quantity': 0.0,
-                            'currency': currency,
-                            'resource_types': set()
+                            'currency': 'USD',
+                            'resource_types': set(),
+                            'locations': set(),
+                            'meter_categories': set()
                         }
-                    costs['by_service'][service_name]['cost'] += cost
-                    costs['by_service'][service_name]['usage_quantity'] += usage_quantity
-                    costs['by_service'][service_name]['resource_types'].add(resource_type)
+                    service_data = costs['by_service'][service_name]
+                    service_data['cost'] += cost
+                    service_data['usage_quantity'] += usage_quantity
+                    service_data['resource_types'].add(resource_type)
+                    service_data['locations'].add(location)
+                    service_data['meter_categories'].add(meter_category)
                     
                     # Group by resource type
                     if resource_type not in costs['by_resource_type']:
                         costs['by_resource_type'][resource_type] = {
                             'cost': 0.0,
                             'usage_quantity': 0.0,
-                            'services': set()
+                            'services': set(),
+                            'meter_categories': set(),
+                            'resource_count': set()
                         }
-                    costs['by_resource_type'][resource_type]['cost'] += cost
-                    costs['by_resource_type'][resource_type]['usage_quantity'] += usage_quantity
-                    costs['by_resource_type'][resource_type]['services'].add(service_name)
+                    rt_data = costs['by_resource_type'][resource_type]
+                    rt_data['cost'] += cost
+                    rt_data['usage_quantity'] += usage_quantity
+                    rt_data['services'].add(service_name)
+                    rt_data['meter_categories'].add(meter_category)
+                    if resource_id != "Unknown":
+                        rt_data['resource_count'].add(resource_id)
                     
                     # Group by meter category
                     if meter_category not in costs['by_meter_category']:
                         costs['by_meter_category'][meter_category] = {
                             'cost': 0.0,
                             'usage_quantity': 0.0,
-                            'resource_types': set()
+                            'resource_types': set(),
+                            'services': set(),
+                            'consumed_services': set()
                         }
-                    costs['by_meter_category'][meter_category]['cost'] += cost
-                    costs['by_meter_category'][meter_category]['usage_quantity'] += usage_quantity
-                    costs['by_meter_category'][meter_category]['resource_types'].add(resource_type)
+                    mc_data = costs['by_meter_category'][meter_category]
+                    mc_data['cost'] += cost
+                    mc_data['usage_quantity'] += usage_quantity
+                    mc_data['resource_types'].add(resource_type)
+                    mc_data['services'].add(service_name)
+                    mc_data['consumed_services'].add(consumed_service)
+                    
+                    # Group by resource ID for detailed breakdown
+                    if resource_id != "Unknown":
+                        if resource_id not in costs['by_resource_id']:
+                            costs['by_resource_id'][resource_id] = {
+                                'cost': 0.0,
+                                'usage_quantity': 0.0,
+                                'resource_type': resource_type,
+                                'service_name': service_name,
+                                'location': location,
+                                'meter_details': {}
+                            }
+                        rid_data = costs['by_resource_id'][resource_id]
+                        rid_data['cost'] += cost
+                        rid_data['usage_quantity'] += usage_quantity
+                        
+                        # Track meter-level details
+                        meter_key = f"{meter_category}:{consumed_service}"
+                        if meter_key not in rid_data['meter_details']:
+                            rid_data['meter_details'][meter_key] = {
+                                'cost': 0.0,
+                                'usage_quantity': 0.0,
+                                'consumed_service': consumed_service
+                            }
+                        rid_data['meter_details'][meter_key]['cost'] += cost
+                        rid_data['meter_details'][meter_key]['usage_quantity'] += usage_quantity
                     
                     # Daily breakdown
                     if usage_date:
@@ -402,113 +391,294 @@ class CostClient(BaseClient):
                                 'date': date_str,
                                 'cost': 0.0,
                                 'usage': 0.0,
-                                'currency': currency,
+                                'currency': 'USD',
                                 'services': {},
-                                'categories': {}
+                                'categories': {},
+                                'resource_types': {}
                             }
-                        daily_costs[date_str]['cost'] += cost
-                        daily_costs[date_str]['usage'] += usage_quantity
+                        day_data = daily_costs[date_str]
+                        day_data['cost'] += cost
+                        day_data['usage'] += usage_quantity
                         
-                        # Track top services per day
-                        if service_name not in daily_costs[date_str]['services']:
-                            daily_costs[date_str]['services'][service_name] = 0.0
-                        daily_costs[date_str]['services'][service_name] += cost
+                        # Track daily breakdowns
+                        if service_name not in day_data['services']:
+                            day_data['services'][service_name] = 0.0
+                        day_data['services'][service_name] += cost
                         
-                        # Track categories per day
-                        category = self._get_cost_category(service_name, meter_category, resource_type)
-                        if category not in daily_costs[date_str]['categories']:
-                            daily_costs[date_str]['categories'][category] = 0.0
-                        daily_costs[date_str]['categories'][category] += cost
+                        category = self._get_cost_category_enhanced(service_name, meter_category, 
+                                                                 resource_type, service_name)
+                        if category not in day_data['categories']:
+                            day_data['categories'][category] = 0.0
+                        day_data['categories'][category] += cost
+                        
+                        if resource_type not in day_data['resource_types']:
+                            day_data['resource_types'][resource_type] = 0.0
+                        day_data['resource_types'][resource_type] += cost
                     
             except (ValueError, TypeError, IndexError) as e:
                 self.logger.warning(f"Error processing cost row: {e}", row=row)
                 continue
         
         # Convert sets to lists for JSON serialization
-        self._convert_sets_to_lists(costs)
+        self._convert_sets_to_lists_enhanced(costs)
+        
+        # Finalize resource group validation
+        resource_validation['other_resource_groups_found'] = list(resource_validation['other_resource_groups_found'])
         
         # Sort daily breakdown by date
         costs['daily_breakdown'] = sorted(daily_costs.values(), key=lambda x: x['date'])
-        costs['currency'] = list(daily_costs.values())[0]['currency'] if daily_costs else 'USD'
         
-        # Add cost distribution percentages
-        if costs['total'] > 0:
-            costs['cost_distribution'] = {
-                'compute_percentage': round((costs['compute'] / costs['total']) * 100, 2),
-                'storage_percentage': round((costs['storage'] / costs['total']) * 100, 2),
-                'network_percentage': round((costs['network'] / costs['total']) * 100, 2),
-                'monitoring_percentage': round((costs['monitoring'] / costs['total']) * 100, 2),
-                'other_percentage': round((costs['other'] / costs['total']) * 100, 2)
-            }
-        
-        # Add summary statistics
-        costs['summary'] = {
-            'total_days': len(daily_costs),
-            'average_daily_cost': round(costs['total'] / len(daily_costs), 2) if daily_costs else 0.0,
-            'peak_daily_cost': max([day['cost'] for day in daily_costs.values()]) if daily_costs else 0.0,
-            'min_daily_cost': min([day['cost'] for day in daily_costs.values()]) if daily_costs else 0.0,
-            'top_service': max(costs['by_service'].items(), key=lambda x: x[1]['cost'])[0] if costs['by_service'] else 'None',
-            'top_resource_type': max(costs['by_resource_type'].items(), key=lambda x: x[1]['cost'])[0] if costs['by_resource_type'] else 'None'
-        }
+        # Add enhanced summary statistics
+        costs['summary'] = self._calculate_enhanced_summary(costs, daily_costs)
         
         self.logger.info(
-            "Processed cost data successfully",
+            "Processed isolated cost data successfully",
+            resource_group=resource_group,
             total_cost=costs['total'],
             currency=costs['currency'],
             days=len(daily_costs),
-            services=len(costs['by_service'])
+            services=len(costs['by_service']),
+            resources=len(costs['by_resource_id']),
+            isolation_validated=resource_validation['isolation_validated']
         )
         
         return costs
     
-    def _categorize_cost(self, costs: Dict[str, Any], cost: float, service_name: str, meter_category: str, resource_type: str):
-        """Categorize cost into compute, storage, network, monitoring, or other."""
+    async def _process_subscription_cost_breakdown(self, response) -> Dict[str, Any]:
+        """Process subscription-wide cost breakdown by resource group."""
+        breakdown = {
+            'total_subscription_cost': 0.0,
+            'by_resource_group': {},
+            'resource_group_ranking': [],
+            'currency': 'USD',
+            'summary': {
+                'resource_group_count': 0,
+                'top_resource_group': None,
+                'cost_distribution': {}
+            }
+        }
+        
+        if not hasattr(response, 'rows') or not response.rows:
+            return breakdown
+        
+        for row in response.rows:
+            try:
+                if len(row) >= 6:
+                    cost = float(row[0]) if row[0] is not None else 0.0
+                    usage_quantity = float(row[1]) if row[1] is not None else 0.0
+                    resource_group = row[2] if row[2] is not None else "Unknown"
+                    service_name = row[3] if row[3] is not None else "Unknown"
+                    resource_type = row[4] if len(row) > 4 and row[4] is not None else "Unknown"
+                    meter_category = row[5] if len(row) > 5 and row[5] is not None else "Unknown"
+                    
+                    breakdown['total_subscription_cost'] += cost
+                    
+                    if resource_group not in breakdown['by_resource_group']:
+                        breakdown['by_resource_group'][resource_group] = {
+                            'total_cost': 0.0,
+                            'by_service': {},
+                            'by_resource_type': {},
+                            'by_meter_category': {}
+                        }
+                    
+                    rg_data = breakdown['by_resource_group'][resource_group]
+                    rg_data['total_cost'] += cost
+                    
+                    # Service breakdown within RG
+                    if service_name not in rg_data['by_service']:
+                        rg_data['by_service'][service_name] = 0.0
+                    rg_data['by_service'][service_name] += cost
+                    
+                    # Resource type breakdown within RG
+                    if resource_type not in rg_data['by_resource_type']:
+                        rg_data['by_resource_type'][resource_type] = 0.0
+                    rg_data['by_resource_type'][resource_type] += cost
+                    
+                    # Meter category breakdown within RG
+                    if meter_category not in rg_data['by_meter_category']:
+                        rg_data['by_meter_category'][meter_category] = 0.0
+                    rg_data['by_meter_category'][meter_category] += cost
+                    
+            except (ValueError, TypeError, IndexError) as e:
+                self.logger.warning(f"Error processing subscription cost row: {e}", row=row)
+                continue
+        
+        # Calculate rankings and summaries
+        rg_costs = [(rg, data['total_cost']) for rg, data in breakdown['by_resource_group'].items()]
+        breakdown['resource_group_ranking'] = sorted(rg_costs, key=lambda x: x[1], reverse=True)
+        
+        breakdown['summary']['resource_group_count'] = len(breakdown['by_resource_group'])
+        if breakdown['resource_group_ranking']:
+            breakdown['summary']['top_resource_group'] = breakdown['resource_group_ranking'][0][0]
+        
+        # Calculate cost distribution percentages
+        if breakdown['total_subscription_cost'] > 0:
+            for rg, cost in breakdown['resource_group_ranking']:
+                percentage = (cost / breakdown['total_subscription_cost']) * 100
+                breakdown['summary']['cost_distribution'][rg] = round(percentage, 2)
+        
+        return breakdown
+    
+    async def _process_detailed_resource_costs(self, response, resource_group: str) -> Dict[str, Any]:
+        """Process detailed per-resource cost response."""
+        detailed_costs = {
+            'resource_group': resource_group,
+            'resources': {},
+            'summary': {
+                'total_resources': 0,
+                'total_cost': 0.0,
+                'avg_cost_per_resource': 0.0,
+                'top_cost_resources': []
+            },
+            'currency': 'USD'
+        }
+        
+        if not hasattr(response, 'rows') or not response.rows:
+            return detailed_costs
+        
+        for row in response.rows:
+            try:
+                if len(row) >= 6:
+                    cost = float(row[0]) if row[0] is not None else 0.0
+                    usage_quantity = float(row[1]) if row[1] is not None else 0.0
+                    usage_date_raw = row[2] if row[2] is not None else None
+                    resource_id = row[3] if row[3] is not None else "Unknown"
+                    resource_type = row[4] if row[4] is not None else "Unknown"
+                    service_name = row[5] if row[5] is not None else "Unknown"
+                    meter_category = row[6] if len(row) > 6 and row[6] is not None else "Unknown"
+                    
+                    usage_date = self._parse_usage_date(usage_date_raw)
+                    
+                    if resource_id not in detailed_costs['resources']:
+                        detailed_costs['resources'][resource_id] = {
+                            'resource_id': resource_id,
+                            'resource_type': resource_type,
+                            'service_name': service_name,
+                            'total_cost': 0.0,
+                            'total_usage': 0.0,
+                            'daily_costs': {},
+                            'meter_breakdown': {},
+                            'cost_category': self._get_cost_category_enhanced(
+                                service_name, meter_category, resource_type, service_name
+                            )
+                        }
+                    
+                    resource_data = detailed_costs['resources'][resource_id]
+                    resource_data['total_cost'] += cost
+                    resource_data['total_usage'] += usage_quantity
+                    
+                    # Daily breakdown for this resource
+                    if usage_date:
+                        date_str = usage_date.strftime('%Y-%m-%d')
+                        if date_str not in resource_data['daily_costs']:
+                            resource_data['daily_costs'][date_str] = 0.0
+                        resource_data['daily_costs'][date_str] += cost
+                    
+                    # Meter breakdown for this resource
+                    meter_key = f"{meter_category}:{service_name}"
+                    if meter_key not in resource_data['meter_breakdown']:
+                        resource_data['meter_breakdown'][meter_key] = {
+                            'cost': 0.0,
+                            'usage': 0.0,
+                            'service': service_name,
+                            'unit': 'unknown'
+                        }
+                    meter_data = resource_data['meter_breakdown'][meter_key]
+                    meter_data['cost'] += cost
+                    meter_data['usage'] += usage_quantity
+                    
+                    detailed_costs['summary']['total_cost'] += cost
+                    
+            except (ValueError, TypeError, IndexError) as e:
+                self.logger.warning(f"Error processing detailed cost row: {e}", row=row)
+                continue
+        
+        # Calculate summary statistics
+        detailed_costs['summary']['total_resources'] = len(detailed_costs['resources'])
+        if detailed_costs['summary']['total_resources'] > 0:
+            detailed_costs['summary']['avg_cost_per_resource'] = (
+                detailed_costs['summary']['total_cost'] / detailed_costs['summary']['total_resources']
+            )
+        
+        # Get top cost resources
+        resource_costs = [
+            (rid, data['total_cost']) for rid, data in detailed_costs['resources'].items()
+        ]
+        detailed_costs['summary']['top_cost_resources'] = sorted(
+            resource_costs, key=lambda x: x[1], reverse=True
+        )[:10]
+        
+        return detailed_costs
+    
+    def _parse_usage_date(self, usage_date_raw) -> Optional[datetime]:
+        """Parse usage date from various formats."""
+        if not usage_date_raw:
+            return None
+        
+        try:
+            if isinstance(usage_date_raw, (int, float)):
+                date_str = str(int(usage_date_raw))
+                if len(date_str) == 8:
+                    year, month, day = int(date_str[:4]), int(date_str[4:6]), int(date_str[6:8])
+                    return datetime(year, month, day)
+            elif isinstance(usage_date_raw, str) and len(usage_date_raw) == 8:
+                return datetime.strptime(usage_date_raw, '%Y%m%d')
+            else:
+                return usage_date_raw if hasattr(usage_date_raw, 'strftime') else None
+        except (ValueError, TypeError):
+            return None
+    
+    def _categorize_cost_enhanced(self, costs: Dict[str, Any], cost: float, service_name: str, 
+                                meter_category: str, resource_type: str, consumed_service: str):
+        """Enhanced cost categorization with more precise rules."""
         service_lower = service_name.lower()
         meter_lower = meter_category.lower()
         resource_type_lower = resource_type.lower()
+        consumed_lower = consumed_service.lower()
         
-        # Compute costs
-        if (any(keyword in service_lower for keyword in ['virtual machines', 'compute', 'container']) or
+        # Compute costs - more precise detection
+        if (any(keyword in service_lower for keyword in ['virtual machines', 'compute', 'container service']) or
             any(keyword in meter_lower for keyword in ['virtual machines', 'compute', 'cpu', 'container']) or
-            'microsoft.compute' in resource_type_lower or
-            'microsoft.containerservice' in resource_type_lower):
+            any(keyword in resource_type_lower for keyword in ['microsoft.compute', 'microsoft.containerservice']) or
+            any(keyword in consumed_lower for keyword in ['compute', 'virtual machines', 'container'])):
             costs['compute'] += cost
         
-        # Storage costs
-        elif (any(keyword in service_lower for keyword in ['storage', 'blob', 'file', 'disk']) or
-              any(keyword in meter_lower for keyword in ['storage', 'disk', 'blob', 'file']) or
-              'microsoft.storage' in resource_type_lower or
-              'microsoft.containerregistry' in resource_type_lower):
+        # Storage costs - enhanced detection
+        elif (any(keyword in service_lower for keyword in ['storage', 'blob', 'file', 'disk', 'managed disks']) or
+              any(keyword in meter_lower for keyword in ['storage', 'disk', 'blob', 'file', 'data stored']) or
+              any(keyword in resource_type_lower for keyword in ['microsoft.storage', 'microsoft.containerregistry']) or
+              any(keyword in consumed_lower for keyword in ['storage', 'disk'])):
             costs['storage'] += cost
         
-        # Network costs
-        elif (any(keyword in service_lower for keyword in ['bandwidth', 'network', 'load balancer', 'dns', 'cdn']) or
-              any(keyword in meter_lower for keyword in ['bandwidth', 'network', 'load balancer', 'dns', 'cdn']) or
-              'microsoft.network' in resource_type_lower):
+        # Network costs - enhanced detection
+        elif (any(keyword in service_lower for keyword in ['bandwidth', 'network', 'load balancer', 'dns', 'cdn', 'application gateway']) or
+              any(keyword in meter_lower for keyword in ['bandwidth', 'network', 'load balancer', 'dns', 'cdn', 'data transfer']) or
+              any(keyword in resource_type_lower for keyword in ['microsoft.network']) or
+              any(keyword in consumed_lower for keyword in ['bandwidth', 'network', 'load balancer'])):
             costs['network'] += cost
         
-        # Monitoring costs
-        elif (any(keyword in service_lower for keyword in ['monitor', 'grafana', 'insights', 'log analytics']) or
-              any(keyword in meter_lower for keyword in ['monitor', 'grafana', 'insights', 'log analytics']) or
-              'microsoft.monitor' in resource_type_lower or
-              'microsoft.insights' in resource_type_lower or
-              'microsoft.dashboard' in resource_type_lower or
-              'microsoft.operationalinsights' in resource_type_lower):
+        # Monitoring costs - enhanced detection
+        elif (any(keyword in service_lower for keyword in ['monitor', 'grafana', 'insights', 'log analytics', 'application insights']) or
+              any(keyword in meter_lower for keyword in ['monitor', 'grafana', 'insights', 'log analytics', 'application insights']) or
+              any(keyword in resource_type_lower for keyword in ['microsoft.monitor', 'microsoft.insights', 'microsoft.dashboard', 'microsoft.operationalinsights']) or
+              any(keyword in consumed_lower for keyword in ['monitoring', 'insights', 'log analytics'])):
             costs['monitoring'] += cost
         
         # Everything else
         else:
             costs['other'] += cost
     
-    def _get_cost_category(self, service_name: str, meter_category: str, resource_type: str) -> str:
-        """Get cost category for a service/meter combination."""
+    def _get_cost_category_enhanced(self, service_name: str, meter_category: str, 
+                                  resource_type: str, consumed_service: str) -> str:
+        """Enhanced cost category detection."""
         service_lower = service_name.lower()
         meter_lower = meter_category.lower()
         resource_type_lower = resource_type.lower()
+        consumed_lower = consumed_service.lower()
         
-        if (any(keyword in service_lower for keyword in ['virtual machines', 'compute', 'container']) or
+        if (any(keyword in service_lower for keyword in ['virtual machines', 'compute', 'container service']) or
             any(keyword in meter_lower for keyword in ['virtual machines', 'compute', 'cpu', 'container']) or
-            'microsoft.compute' in resource_type_lower):
+            'microsoft.compute' in resource_type_lower or 'microsoft.containerservice' in resource_type_lower):
             return 'compute'
         elif (any(keyword in service_lower for keyword in ['storage', 'blob', 'file', 'disk']) or
               any(keyword in meter_lower for keyword in ['storage', 'disk', 'blob', 'file']) or
@@ -525,99 +695,64 @@ class CostClient(BaseClient):
         else:
             return 'other'
     
-    def _convert_sets_to_lists(self, costs: Dict[str, Any]):
+    def _convert_sets_to_lists_enhanced(self, costs: Dict[str, Any]):
         """Convert sets to lists for JSON serialization."""
         for service_data in costs['by_service'].values():
-            if 'resource_types' in service_data and isinstance(service_data['resource_types'], set):
-                service_data['resource_types'] = list(service_data['resource_types'])
+            for key in ['resource_types', 'locations', 'meter_categories']:
+                if key in service_data and isinstance(service_data[key], set):
+                    service_data[key] = list(service_data[key])
         
         for resource_data in costs['by_resource_type'].values():
-            if 'services' in resource_data and isinstance(resource_data['services'], set):
-                resource_data['services'] = list(resource_data['services'])
+            for key in ['services', 'meter_categories', 'resource_count']:
+                if key in resource_data and isinstance(resource_data[key], set):
+                    resource_data[key] = list(resource_data[key]) if key != 'resource_count' else len(resource_data[key])
         
         for meter_data in costs['by_meter_category'].values():
-            if 'resource_types' in meter_data and isinstance(meter_data['resource_types'], set):
-                meter_data['resource_types'] = list(meter_data['resource_types'])
+            for key in ['resource_types', 'services', 'consumed_services']:
+                if key in meter_data and isinstance(meter_data[key], set):
+                    meter_data[key] = list(meter_data[key])
     
-    def _get_fallback_cost_structure(self, 
-                                   resource_group: Optional[str],
-                                   cluster_name: Optional[str],
-                                   start_date: datetime,
-                                   end_date: datetime) -> Dict[str, Any]:
-        """Return fallback cost structure when API fails."""
-        return {
-            'total': 0.0,
-            'compute': 0.0,
-            'storage': 0.0,
-            'network': 0.0,
-            'monitoring': 0.0,
-            'other': 0.0,
-            'currency': 'USD',
-            'daily_breakdown': [],
-            'by_service': {},
-            'by_resource_type': {},
-            'by_meter_category': {},
-            'source': 'fallback_due_to_api_error',
-            'query_metadata': {
-                'resource_group': resource_group,
-                'cluster_name': cluster_name,
-                'start_date': start_date.isoformat(),
-                'end_date': end_date.isoformat(),
-                'error': 'Azure Cost Management API unavailable'
-            },
-            'status': 'no_data_available',
-            'message': 'Cost data not available - Azure Cost Management API failed'
-        }
-    
-    async def _process_service_cost_response(self, response) -> Dict[str, Any]:
-        """Process service cost response."""
-        service_costs = {
-            'services': [],
-            'total': 0.0,
-            'top_services': [],
-            'cost_distribution': {}
+    def _calculate_enhanced_summary(self, costs: Dict[str, Any], daily_costs: Dict[str, Any]) -> Dict[str, Any]:
+        """Calculate enhanced summary statistics."""
+        summary = {
+            'total_days': len(daily_costs),
+            'average_daily_cost': round(costs['total'] / len(daily_costs), 2) if daily_costs else 0.0,
+            'peak_daily_cost': max([day['cost'] for day in daily_costs.values()]) if daily_costs else 0.0,
+            'min_daily_cost': min([day['cost'] for day in daily_costs.values()]) if daily_costs else 0.0,
+            'cost_trend': self._calculate_cost_trend(daily_costs),
+            'service_count': len(costs['by_service']),
+            'resource_type_count': len(costs['by_resource_type']),
+            'resource_count': len(costs['by_resource_id']),
+            'top_service': max(costs['by_service'].items(), key=lambda x: x[1]['cost'])[0] if costs['by_service'] else 'None',
+            'top_resource_type': max(costs['by_resource_type'].items(), key=lambda x: x[1]['cost'])[0] if costs['by_resource_type'] else 'None',
+            'cost_distribution_percentage': {
+                'compute': round((costs['compute'] / costs['total']) * 100, 2) if costs['total'] > 0 else 0,
+                'storage': round((costs['storage'] / costs['total']) * 100, 2) if costs['total'] > 0 else 0,
+                'network': round((costs['network'] / costs['total']) * 100, 2) if costs['total'] > 0 else 0,
+                'monitoring': round((costs['monitoring'] / costs['total']) * 100, 2) if costs['total'] > 0 else 0,
+                'other': round((costs['other'] / costs['total']) * 100, 2) if costs['total'] > 0 else 0
+            }
         }
         
-        if not hasattr(response, 'rows') or not response.rows:
-            return service_costs
+        return summary
+    
+    def _calculate_cost_trend(self, daily_costs: Dict[str, Any]) -> str:
+        """Calculate cost trend over the period."""
+        if len(daily_costs) < 3:
+            return 'insufficient_data'
         
-        service_totals = {}
+        sorted_days = sorted(daily_costs.values(), key=lambda x: x['date'])
+        first_third = sorted_days[:len(sorted_days)//3]
+        last_third = sorted_days[-len(sorted_days)//3:]
         
-        for row in response.rows:
-            if len(row) >= 3:
-                service_name = row[0] if row[0] else "Unknown"
-                meter_category = row[1] if row[1] else "Unknown"
-                cost = float(row[2]) if row[2] else 0.0
-                
-                if service_name not in service_totals:
-                    service_totals[service_name] = {
-                        'name': service_name,
-                        'total_cost': 0.0,
-                        'categories': {}
-                    }
-                
-                service_totals[service_name]['total_cost'] += cost
-                service_totals[service_name]['categories'][meter_category] = \
-                    service_totals[service_name]['categories'].get(meter_category, 0.0) + cost
-                
-                service_costs['total'] += cost
+        first_avg = sum(day['cost'] for day in first_third) / len(first_third)
+        last_avg = sum(day['cost'] for day in last_third) / len(last_third)
         
-        # Convert to list and sort
-        service_costs['services'] = list(service_totals.values())
-        service_costs['services'].sort(key=lambda x: x['total_cost'], reverse=True)
+        change_percent = ((last_avg - first_avg) / first_avg * 100) if first_avg > 0 else 0
         
-        # Get top 5 services
-        service_costs['top_services'] = service_costs['services'][:5]
-        
-        # Calculate percentages
-        if service_costs['total'] > 0:
-            for service in service_costs['services']:
-                percentage = (service['total_cost'] / service_costs['total']) * 100
-                service['percentage'] = round(percentage, 2)
-                service_costs['cost_distribution'][service['name']] = percentage
-        
-        return service_costs
-
-    def __repr__(self) -> str:
-        """String representation."""
-        return f"CostClient(subscription_id='{self.subscription_id}', connected={self._connected})"
+        if change_percent > 10:
+            return 'increasing'
+        elif change_percent < -10:
+            return 'decreasing'
+        else:
+            return 'stable'

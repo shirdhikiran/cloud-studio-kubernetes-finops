@@ -1,4 +1,4 @@
-"""Complete Azure Monitor client implementation for comprehensive metrics collection."""
+"""Enhanced Azure Monitor client with raw metrics collection for accurate utilization data."""
 
 from typing import Dict, Any, List, Optional, Union
 from datetime import datetime, timedelta, timezone
@@ -16,7 +16,7 @@ logger = structlog.get_logger(__name__)
 
 
 class MonitorClient(BaseClient):
-    """Complete Azure Monitor client for comprehensive metrics collection."""
+    """Enhanced Azure Monitor client for raw metrics collection."""
     
     def __init__(self, credential, subscription_id: str, config: Dict[str, Any]):
         super().__init__(config, "MonitorClient")
@@ -28,161 +28,164 @@ class MonitorClient(BaseClient):
         self._metrics_client = None
         self._logs_client = None
         
-        # Azure Monitor metric definitions for AKS
-        self.aks_cluster_metrics = [
-            "node_cpu_usage_percentage",
-            "node_memory_working_set_percentage", 
-            "node_disk_usage_percentage",
-            "node_network_in_bytes",
-            "node_network_out_bytes",
-            "kube_pod_status_ready",
-            "kube_pod_status_phase",
-            "cluster_autoscaler_cluster_safe_to_autoscale",
-            "cluster_autoscaler_scale_down_in_cooldown",
-            "cluster_autoscaler_unneeded_nodes_count"
+        # Raw metric names for different Azure services
+        self.aks_raw_metrics = [
+            "node_cpu_usage_millicores",
+            "node_cpu_allocatable_millicores", 
+            "node_memory_working_set_bytes",
+            "node_memory_allocatable_bytes",
+            "node_network_in_bytes_per_sec",
+            "node_network_out_bytes_per_sec",
+            "node_disk_usage_bytes",
+            "node_disk_io_time_seconds_total",
+            "kube_pod_container_resource_requests_cpu_cores",
+            "kube_pod_container_resource_requests_memory_bytes",
+            "kube_pod_container_resource_limits_cpu_cores", 
+            "kube_pod_container_resource_limits_memory_bytes"
         ]
         
-        self.node_specific_metrics = [
-            "node_cpu_usage_percentage",
-            "node_memory_working_set_percentage",
-            "node_disk_usage_percentage", 
-            "node_network_in_bytes",
-            "node_network_out_bytes",
-            "node_filesystem_usage_bytes",
-            "node_filesystem_avail_bytes"
+        # VM-level metrics for AKS nodes
+        self.vm_raw_metrics = [
+            "Percentage CPU",
+            "Available Memory Bytes",
+            "Network In Total",
+            "Network Out Total", 
+            "Disk Read Bytes/sec",
+            "Disk Write Bytes/sec",
+            "Disk IOPS Consumed Percentage",
+            "OS Disk Bandwidth Consumed Percentage"
         ]
         
         # Storage metrics
-        self.storage_metrics = [
+        self.storage_raw_metrics = [
             "UsedCapacity",
-            "Transactions", 
-            "Ingress",
-            "Egress",
+            "Transactions",
+            "Availability",
             "SuccessServerLatency",
             "SuccessE2ELatency",
-            "Availability"
+            "Ingress",
+            "Egress"
         ]
         
-        # Network metrics
-        self.network_metrics = [
+        # Network metrics  
+        self.network_raw_metrics = [
             "ByteCount",
-            "PacketCount", 
-            "SynCount",
+            "PacketCount",
             "VipAvailability",
-            "DipAvailability"
+            "DipAvailability",
+            "AllocatedSnatPorts",
+            "UsedSnatPorts"
         ]
         
-        # Kusto queries for Log Analytics
-        self.kusto_queries = {
-            'node_inventory': '''
-                KubeNodeInventory
-                | where TimeGenerated >= ago({hours}h)
-                | where ClusterName == '{cluster_name}'
-                | distinct Computer, Status, KubeletVersion, KubeProxyVersion, CreationTimeStamp
-                | order by Computer asc
-            ''',
-            
-            'pod_metrics_by_node': '''
-                KubePodInventory 
-                | where TimeGenerated >= ago({hours}h)
-                | where ClusterName == '{cluster_name}'
-                | where Computer == '{node_name}'
-                | join kind=inner (
-                    Perf
-                    | where ObjectName == 'K8SContainer'
-                    | where CounterName in ('cpuUsageNanoCores', 'memoryWorkingSetBytes')
-                    | where TimeGenerated >= ago({hours}h)
-                    | summarize 
-                        AvgCPU = avg(CounterValue),
-                        MaxCPU = max(CounterValue),
-                        AvgMemory = avg(CounterValue),
-                        MaxMemory = max(CounterValue)
-                    by InstanceName, CounterName, bin(TimeGenerated, 5m)
-                ) on $left.PodUid == $right.InstanceName
-                | project TimeGenerated, PodName = Name, Namespace, CounterName, AvgCPU, MaxCPU, AvgMemory, MaxMemory
-                | order by TimeGenerated desc
-            ''',
-            
-            'node_performance': '''
+        # Raw Kusto queries for Log Analytics
+        self.raw_kusto_queries = {
+            'node_raw_metrics': '''
                 Perf
                 | where TimeGenerated >= ago({hours}h)
-                | where ObjectName == 'K8SNode'
-                | where Computer == '{node_name}'
+                | where ObjectName == "K8SNode" 
+                | where Computer startswith "aks-"
                 | where CounterName in (
-                    'cpuUsageNanoCores', 'memoryWorkingSetBytes', 'cpuCapacityNanoCores', 
-                    'memoryCapacityBytes', 'fsUsedBytes', 'fsAvailBytes'
+                    "cpuUsageNanoCores", "cpuCapacityNanoCores", "cpuAllocatableNanoCores",
+                    "memoryWorkingSetBytes", "memoryCapacityBytes", "memoryAllocatableBytes",
+                    "networkRxBytes", "networkTxBytes",
+                    "fsUsedBytes", "fsCapacityBytes", "fsAvailBytes",
+                    "fsInodesFree", "fsInodesUsed", "fsInodesTotal"
                 )
-                | summarize 
-                    AvgValue = avg(CounterValue),
-                    MaxValue = max(CounterValue),
-                    MinValue = min(CounterValue),
-                    Count = count()
-                by CounterName, bin(TimeGenerated, {granularity_minutes}m)
+                | project TimeGenerated, Computer, CounterName, CounterValue, InstanceName
                 | order by TimeGenerated desc
             ''',
             
-            'pod_resource_requests_limits': '''
-                KubePodInventory
-                | where TimeGenerated >= ago({hours}h) 
-                | where ClusterName == '{cluster_name}'
+            'pod_raw_metrics': '''
+                Perf
+                | where TimeGenerated >= ago({hours}h)
+                | where ObjectName == "K8SContainer"
+                | where CounterName in (
+                    "cpuUsageNanoCores", "cpuRequestNanoCores", "cpuLimitNanoCores",
+                    "memoryWorkingSetBytes", "memoryRequestBytes", "memoryLimitBytes",
+                    "networkRxBytes", "networkTxBytes"
+                )
                 | join kind=inner (
-                    KubeServices
-                    | project ServiceName, ServiceNamespace = Namespace, PodLabel = SelectorLabels
-                ) on $left.Namespace == $right.ServiceNamespace
+                    KubePodInventory
+                    | where TimeGenerated >= ago({hours}h)
+                    | project PodUid, Name, Namespace, Computer, PodStatus, ServiceName
+                ) on $left.InstanceName == $right.PodUid
+                | project TimeGenerated, PodName=Name, Namespace, Computer, CounterName, CounterValue, PodStatus, ServiceName
+                | order by TimeGenerated desc
+            ''',
+            
+            'container_raw_metrics': '''
+                InsightsMetrics
+                | where TimeGenerated >= ago({hours}h)
+                | where Namespace == "container.azm.ms/cpu" or Namespace == "container.azm.ms/memory"
+                | extend Tags = todynamic(Tags)
+                | extend ContainerName = tostring(Tags["container.azm.ms/containerId"])
+                | extend PodName = tostring(Tags["container.azm.ms/podName"])
+                | extend Namespace_k8s = tostring(Tags["container.azm.ms/podNamespace"])
+                | project TimeGenerated, ContainerName, PodName, Namespace_k8s, Name, Val
+                | order by TimeGenerated desc
+            ''',
+            
+            'cluster_raw_utilization': '''
+                KubeNodeInventory
+                | where TimeGenerated >= ago({hours}h)
+                | join kind=inner (
+                    Perf
+                    | where TimeGenerated >= ago({hours}h)
+                    | where ObjectName == "K8SNode"
+                    | where CounterName in ("cpuUsageNanoCores", "cpuCapacityNanoCores", "memoryWorkingSetBytes", "memoryCapacityBytes")
+                ) on Computer
+                | summarize 
+                    AvgCpuUsage = avg(CounterValue),
+                    MaxCpuUsage = max(CounterValue),
+                    MinCpuUsage = min(CounterValue),
+                    LatestCpuUsage = arg_max(TimeGenerated, CounterValue)
+                by Computer, CounterName, bin(TimeGenerated, {granularity_minutes}m)
+                | order by TimeGenerated desc
+            ''',
+            
+            'resource_requests_limits_raw': '''
+                KubePodInventory
+                | where TimeGenerated >= ago({hours}h)
+                | join kind=leftouter (
+                    Perf
+                    | where TimeGenerated >= ago({hours}h)
+                    | where ObjectName == "K8SContainer"
+                    | where CounterName in ("cpuRequestNanoCores", "cpuLimitNanoCores", "memoryRequestBytes", "memoryLimitBytes")
+                    | summarize arg_max(TimeGenerated, CounterValue) by InstanceName, CounterName
+                ) on $left.PodUid == $right.InstanceName
                 | project 
                     PodName = Name,
                     Namespace,
                     Computer,
+                    CounterName,
+                    RequestedValue = CounterValue,
                     PodStatus,
-                    PodCreationTimeStamp,
                     ContainerName,
-                    ContainerID,
-                    PodRestartCount
-                | limit 1000
+                    PodCreationTimeStamp
+                | where isnotnull(RequestedValue)
             ''',
             
-            'cluster_events': '''
-                KubeEvents
-                | where TimeGenerated >= ago({hours}h)
-                | where ClusterName == '{cluster_name}'
-                | where Type == 'Warning' or Type == 'Error'
-                | summarize 
-                    EventCount = count(),
-                    LastSeen = max(TimeGenerated),
-                    FirstSeen = min(TimeGenerated)
-                by ObjectKind, Reason, Message
-                | order by EventCount desc
-            ''',
-            
-            'storage_usage': '''
+            'storage_raw_metrics': '''
                 InsightsMetrics
                 | where TimeGenerated >= ago({hours}h)
-                | where Namespace == 'container.azm.ms/disk'
-                | where Name in ('used_bytes', 'free_bytes', 'used_percent')
+                | where Namespace == "container.azm.ms/disk"
+                | where Name in ("used_bytes", "free_bytes", "capacity_bytes", "used_percent", "inodes_used", "inodes_free")
                 | extend Tags = todynamic(Tags)
-                | extend ClusterName = tostring(Tags['container.azm.ms/clusterId'])
-                | where ClusterName contains '{cluster_name}'
-                | summarize 
-                    AvgValue = avg(Val),
-                    MaxValue = max(Val),
-                    MinValue = min(Val)
-                by Name, bin(TimeGenerated, {granularity_minutes}m)
+                | extend Device = tostring(Tags["container.azm.ms/device"])
+                | extend ClusterName = tostring(Tags["container.azm.ms/clusterId"])
+                | project TimeGenerated, ClusterName, Computer, Device, Name, Val
                 | order by TimeGenerated desc
             ''',
             
-            'network_usage': '''
+            'network_raw_metrics': '''
                 InsightsMetrics
                 | where TimeGenerated >= ago({hours}h)
-                | where Namespace == 'container.azm.ms/network'
-                | where Name in ('rx_bytes', 'tx_bytes', 'rx_dropped', 'tx_dropped')
+                | where Namespace == "container.azm.ms/network"
+                | where Name in ("rx_bytes", "tx_bytes", "rx_packets", "tx_packets", "rx_errors", "tx_errors", "rx_dropped", "tx_dropped")
                 | extend Tags = todynamic(Tags)
-                | extend ClusterName = tostring(Tags['container.azm.ms/clusterId'])
-                | where ClusterName contains '{cluster_name}'
-                | summarize 
-                    AvgValue = avg(Val),
-                    MaxValue = max(Val),
-                    TotalValue = sum(Val)
-                by Name, bin(TimeGenerated, {granularity_minutes}m)
+                | extend Interface = tostring(Tags["container.azm.ms/interface"])
+                | extend ClusterName = tostring(Tags["container.azm.ms/clusterId"])
+                | project TimeGenerated, ClusterName, Computer, Interface, Name, Val
                 | order by TimeGenerated desc
             '''
         }
@@ -205,7 +208,7 @@ class MonitorClient(BaseClient):
                 )
                 self.logger.info("Log Analytics client initialized successfully")
             else:
-                self.logger.warning("Log Analytics workspace ID not provided - pod-level metrics will be limited")
+                self.logger.warning("Log Analytics workspace ID not provided - detailed metrics will be limited")
             
             self._connected = True
             self.logger.info("Azure Monitor clients connected successfully")
@@ -236,13 +239,13 @@ class MonitorClient(BaseClient):
             if not self._connected or not self._metrics_client:
                 return False
             
-            # Try to list metric definitions as a health check
-            test_resource_id = f"/subscriptions/{self.subscription_id}/resourceGroups/test/providers/Microsoft.Compute/virtualMachines/test"
+            # Test with a simple metric query
+            test_resource_id = f"/subscriptions/{self.subscription_id}"
             try:
-                # This will fail for non-existent resource but validates API connectivity
+                # This should work for any subscription
                 list(self._monitor_client.metric_definitions.list(test_resource_id))
             except ResourceNotFoundError:
-                # Expected for non-existent resource - indicates API is accessible
+                # Expected for the test - indicates API is accessible
                 pass
             except ClientAuthenticationError:
                 return False
@@ -254,465 +257,247 @@ class MonitorClient(BaseClient):
             return False
     
     @retry_with_backoff(max_retries=3)
-    async def get_cluster_metrics(self,
-                                cluster_resource_id: str,
-                                start_time: Optional[datetime] = None,
-                                end_time: Optional[datetime] = None,
-                                granularity: timedelta = timedelta(minutes=5)) -> Dict[str, Any]:
-        """Get comprehensive cluster-level metrics."""
+    async def get_cluster_raw_metrics(self,
+                                    cluster_resource_id: str,
+                                    cluster_name: str,
+                                    start_time: Optional[datetime] = None,
+                                    end_time: Optional[datetime] = None,
+                                    granularity_minutes: int = 5) -> Dict[str, Any]:
+        """Get comprehensive raw metrics for cluster with maximum detail."""
         if not self._connected:
             raise MetricsException("Monitor client not connected")
         
         if not end_time:
             end_time = datetime.now(timezone.utc)
         if not start_time:
-            start_time = end_time - timedelta(hours=1)
+            start_time = end_time - timedelta(hours=24)
         
-        self.logger.info(f"Collecting cluster metrics from {start_time} to {end_time}")
+        self.logger.info(f"Collecting raw metrics for cluster: {cluster_name}")
         
-        cluster_metrics = {
-            'cpu_metrics': {},
-            'memory_metrics': {},
-            'disk_metrics': {},
-            'network_metrics': {},
-            'pod_metrics': {},
-            'autoscaler_metrics': {},
-            'collection_metadata': {
-                'resource_id': cluster_resource_id,
+        raw_metrics = {
+            'cluster_name': cluster_name,
+            'cluster_resource_id': cluster_resource_id,
+            'collection_period': {
                 'start_time': start_time.isoformat(),
                 'end_time': end_time.isoformat(),
-                'granularity_minutes': granularity.total_seconds() / 60,
-                'metrics_collected': [],
-                'metrics_failed': []
-            }
-        }
-        
-        # Collect all cluster metrics in parallel
-        metric_tasks = []
-        for metric_name in self.aks_cluster_metrics:
-            task = self._get_single_metric_data(cluster_resource_id, metric_name, start_time, end_time, granularity)
-            metric_tasks.append((metric_name, task))
-        
-        # Execute all metric collection tasks
-        metric_results = await asyncio.gather(*[task for _, task in metric_tasks], return_exceptions=True)
-        
-        # Process results
-        for i, (metric_name, result) in enumerate(zip([name for name, _ in metric_tasks], metric_results)):
-            if isinstance(result, Exception):
-                self.logger.warning(f"Failed to collect metric {metric_name}: {result}")
-                cluster_metrics['collection_metadata']['metrics_failed'].append(metric_name)
-            elif result:
-                # Categorize metrics
-                if 'cpu' in metric_name:
-                    cluster_metrics['cpu_metrics'][metric_name] = result
-                elif 'memory' in metric_name:
-                    cluster_metrics['memory_metrics'][metric_name] = result
-                elif 'disk' in metric_name:
-                    cluster_metrics['disk_metrics'][metric_name] = result
-                elif 'network' in metric_name:
-                    cluster_metrics['network_metrics'][metric_name] = result
-                elif 'pod' in metric_name:
-                    cluster_metrics['pod_metrics'][metric_name] = result
-                elif 'autoscaler' in metric_name:
-                    cluster_metrics['autoscaler_metrics'][metric_name] = result
-                
-                cluster_metrics['collection_metadata']['metrics_collected'].append(metric_name)
-        
-        # Add summary statistics
-        cluster_metrics['summary'] = self._calculate_cluster_summary(cluster_metrics)
-        
-        return cluster_metrics
-    
-    @retry_with_backoff(max_retries=3)
-    async def get_individual_node_metrics(self,
-                                        cluster_name: str,
-                                        start_time: Optional[datetime] = None,
-                                        end_time: Optional[datetime] = None,
-                                        granularity_minutes: int = 5) -> Dict[str, Any]:
-        """Get individual node metrics without aggregation."""
-        if not self._connected:
-            raise MetricsException("Monitor client not connected")
-        
-        if not end_time:
-            end_time = datetime.now(timezone.utc)
-        if not start_time:
-            start_time = end_time - timedelta(hours=1)
-        
-        self.logger.info(f"Collecting individual node metrics for cluster: {cluster_name}")
-        
-        node_metrics = {
-            'nodes': {},
-            'collection_metadata': {
-                'cluster_name': cluster_name,
-                'start_time': start_time.isoformat(),
-                'end_time': end_time.isoformat(),
-                'granularity_minutes': granularity_minutes,
-                'nodes_discovered': 0,
-                'nodes_with_data': 0,
-                'collection_method': 'log_analytics',
-                'fallback_used': False
-            }
-        }
-        
-        try:
-            # Check if Log Analytics is available
-            if not self._logs_client or not self.log_analytics_workspace_id:
-                self.logger.warning("Log Analytics not available, using fallback method")
-                return await self._get_node_metrics_fallback(cluster_name, start_time, end_time, granularity_minutes)
-            
-            # First, get list of nodes
-            hours = int((end_time - start_time).total_seconds() / 3600)
-            node_inventory_query = self.kusto_queries['node_inventory'].format(
-                hours=hours,
-                cluster_name=cluster_name
-            )
-            
-            node_inventory_response = await self._execute_kusto_query(
-                node_inventory_query, start_time, end_time
-            )
-            
-            if not node_inventory_response:
-                self.logger.warning("No node inventory data available, using fallback")
-                return await self._get_node_metrics_fallback(cluster_name, start_time, end_time, granularity_minutes)
-            
-            # Parse node inventory
-            nodes = self._parse_node_inventory(node_inventory_response)
-            node_metrics['collection_metadata']['nodes_discovered'] = len(nodes)
-            
-            if not nodes:
-                self.logger.warning("No nodes found in inventory, using fallback")
-                return await self._get_node_metrics_fallback(cluster_name, start_time, end_time, granularity_minutes)
-            
-            # Collect metrics for each node individually
-            for node_info in nodes:
-                node_name = node_info.get('computer', '')
-                if not node_name:
-                    continue
-                    
-                self.logger.debug(f"Collecting metrics for node: {node_name}")
-                
-                try:
-                    # Get node performance metrics
-                    node_perf_data = await self._get_node_performance_metrics(
-                        cluster_name, node_name, start_time, end_time, granularity_minutes
-                    )
-                    
-                    # Get pod metrics for this node
-                    node_pod_data = await self._get_node_pod_metrics(
-                        cluster_name, node_name, start_time, end_time
-                    )
-                    
-                    # Combine node data
-                    node_metrics['nodes'][node_name] = {
-                        'node_info': node_info,
-                        'performance_metrics': node_perf_data,
-                        'pod_metrics': node_pod_data,
-                        'resource_utilization': self._calculate_node_utilization(node_perf_data),
-                        'efficiency_scores': self._calculate_node_efficiency(node_perf_data),
-                        'collection_status': 'success'
-                    }
-                    
-                    node_metrics['collection_metadata']['nodes_with_data'] += 1
-                    
-                except Exception as e:
-                    self.logger.error(f"Failed to collect metrics for node {node_name}: {e}")
-                    node_metrics['nodes'][node_name] = {
-                        'node_info': node_info,
-                        'error': str(e),
-                        'collection_status': 'failed'
-                    }
-            
-            return node_metrics
-            
-        except Exception as e:
-            self.logger.error(f"Failed to collect individual node metrics: {e}")
-            self.logger.info("Attempting fallback method")
-            return await self._get_node_metrics_fallback(cluster_name, start_time, end_time, granularity_minutes)
-    
-    async def _get_node_metrics_fallback(self,
-                                       cluster_name: str,
-                                       start_time: datetime,
-                                       end_time: datetime,
-                                       granularity_minutes: int) -> Dict[str, Any]:
-        """Fallback method for node metrics when Log Analytics is not available."""
-        self.logger.info("Using fallback method for node metrics collection")
-        
-        return {
-            'nodes': {},
-            'collection_metadata': {
-                'cluster_name': cluster_name,
-                'start_time': start_time.isoformat(),
-                'end_time': end_time.isoformat(),
-                'granularity_minutes': granularity_minutes,
-                'nodes_discovered': 0,
-                'nodes_with_data': 0,
-                'collection_method': 'fallback',
-                'fallback_used': True,
-                'fallback_reason': 'log_analytics_unavailable'
+                'granularity_minutes': granularity_minutes
             },
-            'fallback_info': {
-                'message': 'Individual node metrics require Log Analytics workspace configuration',
-                'requirements': [
-                    'Configure Log Analytics workspace ID',
-                    'Enable Azure Monitor for Containers addon',
-                    'Ensure proper RBAC permissions for Log Analytics'
-                ],
-                'alternative_methods': [
-                    'Use Azure Monitor cluster-level metrics',
-                    'Configure Prometheus for detailed node metrics',
-                    'Use kubectl top nodes for basic utilization'
-                ]
-            }
-        }
-    
-    @retry_with_backoff(max_retries=3)
-    async def get_storage_metrics(self,
-                                cluster_resource_id: str,
-                                start_time: Optional[datetime] = None,
-                                end_time: Optional[datetime] = None,
-                                granularity: timedelta = timedelta(minutes=5)) -> Dict[str, Any]:
-        """Get comprehensive storage metrics."""
-        if not self._connected:
-            raise MetricsException("Monitor client not connected")
-        
-        if not end_time:
-            end_time = datetime.now(timezone.utc)
-        if not start_time:
-            start_time = end_time - timedelta(hours=1)
-        
-        storage_metrics = {
-            'cluster_storage_metrics': {},
-            'persistent_volume_metrics': {},
-            'storage_class_analysis': {},
+            'node_raw_metrics': {},
+            'pod_raw_metrics': {},
+            'container_raw_metrics': {},
+            'storage_raw_metrics': {},
+            'network_raw_metrics': {},
+            'cluster_level_metrics': {},
+            'resource_utilization_raw': {},
             'collection_metadata': {
-                'resource_id': cluster_resource_id,
-                'start_time': start_time.isoformat(),
-                'end_time': end_time.isoformat()
+                'metrics_collected': [],
+                'metrics_failed': [],
+                'data_sources': [],
+                'total_data_points': 0
             }
         }
         
         try:
-            # Get cluster storage metrics from Log Analytics
-            if self._logs_client:
-                cluster_name = cluster_resource_id.split('/')[-1]
-                hours = int((end_time - start_time).total_seconds() / 3600)
-                granularity_minutes = int(granularity.total_seconds() / 60)
-                
-                storage_query = self.kusto_queries['storage_usage'].format(
-                    hours=hours,
-                    cluster_name=cluster_name,
-                    granularity_minutes=granularity_minutes
-                )
-                
-                storage_response = await self._execute_kusto_query(storage_query, start_time, end_time)
-                if storage_response:
-                    storage_metrics['cluster_storage_metrics'] = self._parse_storage_metrics(storage_response)
+            # Collect from multiple sources in parallel
+            collection_tasks = []
             
-            # Get storage account metrics if available
-            storage_account_metrics = await self._get_related_storage_account_metrics(
-                cluster_resource_id, start_time, end_time, granularity
+            # 1. Log Analytics raw metrics (most detailed)
+            if self._logs_client and self.log_analytics_workspace_id:
+                collection_tasks.extend([
+                    self._collect_node_raw_metrics(cluster_name, start_time, end_time, granularity_minutes),
+                    self._collect_pod_raw_metrics(cluster_name, start_time, end_time, granularity_minutes),
+                    self._collect_container_raw_metrics(cluster_name, start_time, end_time, granularity_minutes),
+                    self._collect_storage_raw_metrics(cluster_name, start_time, end_time, granularity_minutes),
+                    self._collect_network_raw_metrics(cluster_name, start_time, end_time, granularity_minutes)
+                ])
+                raw_metrics['collection_metadata']['data_sources'].append('log_analytics')
+            
+            # 2. Azure Monitor VM metrics (for node-level data)
+            collection_tasks.append(
+                self._collect_vm_level_metrics(cluster_resource_id, start_time, end_time, granularity_minutes)
             )
-            if storage_account_metrics:
-                storage_metrics['storage_account_metrics'] = storage_account_metrics
+            raw_metrics['collection_metadata']['data_sources'].append('azure_monitor_vms')
             
-            return storage_metrics
+            # 3. Azure Monitor cluster metrics
+            collection_tasks.append(
+                self._collect_cluster_level_metrics(cluster_resource_id, start_time, end_time, granularity_minutes)
+            )
+            raw_metrics['collection_metadata']['data_sources'].append('azure_monitor_cluster')
+            
+            # Execute all collection tasks
+            results = await asyncio.gather(*collection_tasks, return_exceptions=True)
+            
+            # Process results
+            result_keys = ['node_raw_metrics', 'pod_raw_metrics', 'container_raw_metrics', 
+                          'storage_raw_metrics', 'network_raw_metrics', 'vm_level_metrics', 
+                          'cluster_level_metrics']
+            
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    self.logger.warning(f"Failed to collect {result_keys[i % len(result_keys)]}: {result}")
+                    raw_metrics['collection_metadata']['metrics_failed'].append(result_keys[i % len(result_keys)])
+                else:
+                    if i < len(result_keys):
+                        raw_metrics[result_keys[i]] = result
+                        raw_metrics['collection_metadata']['metrics_collected'].append(result_keys[i])
+                        if isinstance(result, dict) and 'data_points' in result:
+                            raw_metrics['collection_metadata']['total_data_points'] += result.get('data_points', 0)
+            
+            # Calculate derived metrics from raw data
+            raw_metrics['derived_metrics'] = self._calculate_derived_metrics(raw_metrics)
+            
+            # Generate utilization summary from raw data
+            raw_metrics['utilization_summary'] = self._generate_utilization_summary(raw_metrics)
+            
+            self.logger.info(
+                "Raw metrics collection completed",
+                cluster=cluster_name,
+                data_points=raw_metrics['collection_metadata']['total_data_points'],
+                sources=raw_metrics['collection_metadata']['data_sources']
+            )
+            
+            return raw_metrics
             
         except Exception as e:
-            self.logger.error(f"Failed to collect storage metrics: {e}")
-            return storage_metrics
+            self.logger.error(f"Failed to collect raw metrics for {cluster_name}: {e}")
+            raise MetricsException(f"Raw metrics collection failed: {e}")
     
-    @retry_with_backoff(max_retries=3)
-    async def get_network_metrics(self,
-                                cluster_resource_id: str,
-                                start_time: Optional[datetime] = None,
-                                end_time: Optional[datetime] = None,
-                                granularity: timedelta = timedelta(minutes=5)) -> Dict[str, Any]:
-        """Get comprehensive network metrics."""
-        if not self._connected:
-            raise MetricsException("Monitor client not connected")
+    async def _collect_node_raw_metrics(self, cluster_name: str, start_time: datetime, 
+                                       end_time: datetime, granularity_minutes: int) -> Dict[str, Any]:
+        """Collect raw node-level metrics from Log Analytics."""
+        hours = int((end_time - start_time).total_seconds() / 3600)
         
-        if not end_time:
-            end_time = datetime.now(timezone.utc)
-        if not start_time:
-            start_time = end_time - timedelta(hours=1)
-        
-        network_metrics = {
-            'cluster_network_metrics': {},
-            'ingress_metrics': {},
-            'egress_metrics': {},
-            'load_balancer_metrics': {},
-            'collection_metadata': {
-                'resource_id': cluster_resource_id,
-                'start_time': start_time.isoformat(),
-                'end_time': end_time.isoformat()
-            }
-        }
+        query = self.raw_kusto_queries['node_raw_metrics'].format(
+            hours=hours
+        )
         
         try:
-            # Get cluster network metrics from Log Analytics
-            if self._logs_client:
-                cluster_name = cluster_resource_id.split('/')[-1]
-                hours = int((end_time - start_time).total_seconds() / 3600)
-                granularity_minutes = int(granularity.total_seconds() / 60)
-                
-                network_query = self.kusto_queries['network_usage'].format(
-                    hours=hours,
-                    cluster_name=cluster_name,
-                    granularity_minutes=granularity_minutes
-                )
-                
-                network_response = await self._execute_kusto_query(network_query, start_time, end_time)
-                if network_response:
-                    parsed_network = self._parse_network_metrics(network_response)
-                    network_metrics['cluster_network_metrics'] = parsed_network
+            response = await self._execute_kusto_query(query, start_time, end_time)
+            return self._process_node_raw_metrics(response)
+        except Exception as e:
+            self.logger.error(f"Failed to collect node raw metrics: {e}")
+            return {'error': str(e), 'data_points': 0}
+    
+    async def _collect_pod_raw_metrics(self, cluster_name: str, start_time: datetime,
+                                      end_time: datetime, granularity_minutes: int) -> Dict[str, Any]:
+        """Collect raw pod-level metrics from Log Analytics."""
+        hours = int((end_time - start_time).total_seconds() / 3600)
+        
+        query = self.raw_kusto_queries['pod_raw_metrics'].format(
+            hours=hours
+        )
+        
+        try:
+            response = await self._execute_kusto_query(query, start_time, end_time)
+            return self._process_pod_raw_metrics(response)
+        except Exception as e:
+            self.logger.error(f"Failed to collect pod raw metrics: {e}")
+            return {'error': str(e), 'data_points': 0}
+    
+    async def _collect_container_raw_metrics(self, cluster_name: str, start_time: datetime,
+                                           end_time: datetime, granularity_minutes: int) -> Dict[str, Any]:
+        """Collect raw container-level metrics from Container Insights."""
+        hours = int((end_time - start_time).total_seconds() / 3600)
+        
+        query = self.raw_kusto_queries['container_raw_metrics'].format(
+            hours=hours
+        )
+        
+        try:
+            response = await self._execute_kusto_query(query, start_time, end_time)
+            return self._process_container_raw_metrics(response)
+        except Exception as e:
+            self.logger.error(f"Failed to collect container raw metrics: {e}")
+            return {'error': str(e), 'data_points': 0}
+    
+    async def _collect_storage_raw_metrics(self, cluster_name: str, start_time: datetime,
+                                         end_time: datetime, granularity_minutes: int) -> Dict[str, Any]:
+        """Collect raw storage metrics from Container Insights."""
+        hours = int((end_time - start_time).total_seconds() / 3600)
+        
+        query = self.raw_kusto_queries['storage_raw_metrics'].format(
+            hours=hours
+        )
+        
+        try:
+            response = await self._execute_kusto_query(query, start_time, end_time)
+            return self._process_storage_raw_metrics(response)
+        except Exception as e:
+            self.logger.error(f"Failed to collect storage raw metrics: {e}")
+            return {'error': str(e), 'data_points': 0}
+    
+    async def _collect_network_raw_metrics(self, cluster_name: str, start_time: datetime,
+                                         end_time: datetime, granularity_minutes: int) -> Dict[str, Any]:
+        """Collect raw network metrics from Container Insights."""
+        hours = int((end_time - start_time).total_seconds() / 3600)
+        
+        query = self.raw_kusto_queries['network_raw_metrics'].format(
+            hours=hours
+        )
+        
+        try:
+            response = await self._execute_kusto_query(query, start_time, end_time)
+            return self._process_network_raw_metrics(response)
+        except Exception as e:
+            self.logger.error(f"Failed to collect network raw metrics: {e}")
+            return {'error': str(e), 'data_points': 0}
+    
+    async def _collect_vm_level_metrics(self, cluster_resource_id: str, start_time: datetime,
+                                       end_time: datetime, granularity_minutes: int) -> Dict[str, Any]:
+        """Collect VM-level metrics for AKS nodes."""
+        try:
+            # Get node resource group from cluster resource ID
+            cluster_parts = cluster_resource_id.split('/')
+            cluster_name = cluster_parts[-1]
+            resource_group = cluster_parts[4]
             
-            # Get load balancer metrics
-            lb_metrics = await self._get_load_balancer_metrics(
-                cluster_resource_id, start_time, end_time, granularity
-            )
-            if lb_metrics:
-                network_metrics['load_balancer_metrics'] = lb_metrics
-            
-            return network_metrics
+            # Node resource group follows pattern: MC_{resource_group}_{cluster_name}_{location}
+            # We'll need to discover the actual node resource group
+            vm_metrics = await self._get_aks_node_vm_metrics(resource_group, cluster_name, start_time, end_time)
+            return vm_metrics
             
         except Exception as e:
-            self.logger.error(f"Failed to collect network metrics: {e}")
-            return network_metrics
+            self.logger.error(f"Failed to collect VM level metrics: {e}")
+            return {'error': str(e), 'data_points': 0}
     
-    @retry_with_backoff(max_retries=3)
-    async def get_pod_metrics_detailed(self,
-                                     cluster_name: str,
-                                     start_time: Optional[datetime] = None,
-                                     end_time: Optional[datetime] = None,
-                                     namespace_filter: Optional[str] = None) -> Dict[str, Any]:
-        """Get detailed pod metrics with resource consumption analysis."""
-        if not self._logs_client or not self.log_analytics_workspace_id:
-            self.logger.warning("Log Analytics not configured")
-            return {}
-        
-        if not end_time:
-            end_time = datetime.now(timezone.utc)
-        if not start_time:
-            start_time = end_time - timedelta(hours=1)
-        
-        pod_metrics = {
-            'pod_summary': {},
-            'resource_requests_limits': {},
-            'top_cpu_consumers': [],
-            'top_memory_consumers': [],
-            'pod_restart_analysis': [],
-            'namespace_analysis': {},
-            'collection_metadata': {
-                'cluster_name': cluster_name,
-                'start_time': start_time.isoformat(),
-                'end_time': end_time.isoformat(),
-                'namespace_filter': namespace_filter
-            }
-        }
-        
+    async def _collect_cluster_level_metrics(self, cluster_resource_id: str, start_time: datetime,
+                                           end_time: datetime, granularity_minutes: int) -> Dict[str, Any]:
+        """Collect cluster-level metrics from Azure Monitor."""
         try:
-            hours = int((end_time - start_time).total_seconds() / 3600)
+            granularity = timedelta(minutes=granularity_minutes)
             
-            # Get pod resource requests and limits
-            requests_limits_query = self.kusto_queries['pod_resource_requests_limits'].format(
-                hours=hours,
-                cluster_name=cluster_name
-            )
+            cluster_metrics = {}
+            for metric_name in self.aks_raw_metrics:
+                try:
+                    metric_data = await self._get_single_metric_raw(
+                        cluster_resource_id, metric_name, start_time, end_time, granularity
+                    )
+                    if metric_data:
+                        cluster_metrics[metric_name] = metric_data
+                except Exception as e:
+                    self.logger.debug(f"Metric {metric_name} not available: {e}")
+                    continue
             
-            requests_response = await self._execute_kusto_query(requests_limits_query, start_time, end_time)
-            if requests_response:
-                pod_metrics['resource_requests_limits'] = self._parse_pod_requests_limits(requests_response)
-            
-            # Get top CPU consumers
-            cpu_consumers = await self._get_top_resource_consuming_pods(
-                cluster_name, start_time, end_time, 'cpu', 20
-            )
-            pod_metrics['top_cpu_consumers'] = cpu_consumers
-            
-            # Get top memory consumers
-            memory_consumers = await self._get_top_resource_consuming_pods(
-                cluster_name, start_time, end_time, 'memory', 20
-            )
-            pod_metrics['top_memory_consumers'] = memory_consumers
-            
-            # Analyze by namespace
-            namespace_analysis = self._analyze_by_namespace(cpu_consumers, memory_consumers)
-            pod_metrics['namespace_analysis'] = namespace_analysis
-            
-            return pod_metrics
+            return {
+                'metrics': cluster_metrics,
+                'data_points': sum(len(data) for data in cluster_metrics.values())
+            }
             
         except Exception as e:
-            self.logger.error(f"Failed to get detailed pod metrics: {e}")
-            return pod_metrics
+            self.logger.error(f"Failed to collect cluster level metrics: {e}")
+            return {'error': str(e), 'data_points': 0}
     
-    @retry_with_backoff(max_retries=3)
-    async def get_cluster_health_metrics(self,
-                                       cluster_resource_id: str,
-                                       start_time: Optional[datetime] = None,
-                                       end_time: Optional[datetime] = None) -> Dict[str, Any]:
-        """Get comprehensive cluster health metrics."""
-        if not self._connected:
-            raise MetricsException("Monitor client not connected")
-        
-        if not end_time:
-            end_time = datetime.now(timezone.utc)
-        if not start_time:
-            start_time = end_time - timedelta(hours=1)
-        
-        health_metrics = {
-            'cluster_events': {},
-            'node_status': {},
-            'pod_health': {},
-            'resource_quotas': {},
-            'collection_metadata': {
-                'resource_id': cluster_resource_id,
-                'start_time': start_time.isoformat(),
-                'end_time': end_time.isoformat()
-            }
-        }
-        
+    async def _get_single_metric_raw(self, resource_id: str, metric_name: str,
+                                   start_time: datetime, end_time: datetime,
+                                   granularity: timedelta) -> List[Dict[str, Any]]:
+        """Get raw data for a single metric with all aggregation types."""
         try:
-            if self._logs_client:
-                cluster_name = cluster_resource_id.split('/')[-1]
-                hours = int((end_time - start_time).total_seconds() / 3600)
-                
-                # Get cluster events
-                events_query = self.kusto_queries['cluster_events'].format(
-                    hours=hours,
-                    cluster_name=cluster_name
-                )
-                
-                events_response = await self._execute_kusto_query(events_query, start_time, end_time)
-                if events_response:
-                    health_metrics['cluster_events'] = self._parse_cluster_events(events_response)
-            
-            return health_metrics
-            
-        except Exception as e:
-            self.logger.error(f"Failed to get cluster health metrics: {e}")
-            return health_metrics
-    
-    # Helper methods for metric processing
-    async def _get_single_metric_data(self,
-                                    resource_id: str,
-                                    metric_name: str,
-                                    start_time: datetime,
-                                    end_time: datetime,
-                                    granularity: timedelta) -> List[Dict[str, Any]]:
-        """Get data for a single metric."""
-        try:
-            if not self._metrics_client:
-                return []
-            
             response = self._metrics_client.query_resource(
                 resource_uri=resource_id,
                 metric_names=[metric_name],
                 timespan=(start_time, end_time),
                 granularity=granularity,
                 aggregations=[
-                    MetricAggregationType.AVERAGE, 
-                    MetricAggregationType.MAXIMUM, 
-                    MetricAggregationType.MINIMUM,
                     MetricAggregationType.TOTAL,
                     MetricAggregationType.COUNT
                 ]
@@ -731,7 +516,10 @@ class MonitorClient(BaseClient):
                             'count': int(data_point.count) if data_point.count is not None else None,
                             'metric_name': metric_name,
                             'unit': metric.unit.value if metric.unit else None,
-                            'resource_id': resource_id
+                            'resource_id': resource_id,
+                            'timeseries_metadata': {
+                                'metadata': timeseries.metadata_values if hasattr(timeseries, 'metadata_values') else {}
+                            }
                         })
             
             return metric_data
@@ -740,178 +528,40 @@ class MonitorClient(BaseClient):
             self.logger.debug(f"Error getting metric {metric_name}: {e}")
             return []
     
-    async def _get_node_performance_metrics(self,
-                                          cluster_name: str,
-                                          node_name: str,
-                                          start_time: datetime,
-                                          end_time: datetime,
-                                          granularity_minutes: int) -> Dict[str, Any]:
-        """Get performance metrics for a specific node."""
+    async def _get_aks_node_vm_metrics(self, resource_group: str, cluster_name: str,
+                                     start_time: datetime, end_time: datetime) -> Dict[str, Any]:
+        """Get VM-level metrics for AKS nodes."""
         try:
-            hours = int((end_time - start_time).total_seconds() / 3600)
+            # AKS creates VMs in a managed resource group with pattern MC_{rg}_{cluster}_{location}
+            # We need to discover this or get it from the cluster properties
             
-            node_perf_query = self.kusto_queries['node_performance'].format(
-                hours=hours,
-                node_name=node_name,
-                granularity_minutes=granularity_minutes
-            )
+            vm_metrics = {
+                'node_vm_metrics': {},
+                'aggregated_vm_metrics': {},
+                'data_points': 0
+            }
             
-            response = await self._execute_kusto_query(node_perf_query, start_time, end_time)
+            # For now, return structure indicating VM metrics need node resource group discovery
+            vm_metrics['note'] = "VM metrics require node resource group discovery from AKS cluster properties"
+            vm_metrics['required_info'] = {
+                'node_resource_group': f"MC_{resource_group}_{cluster_name}_<location>",
+                'vm_scale_set_name': f"aks-nodepool1-*",
+                'required_metrics': self.vm_raw_metrics
+            }
             
-            if response:
-                return self._parse_node_performance_data(response)
-            
-            return {}
+            return vm_metrics
             
         except Exception as e:
-            self.logger.error(f"Failed to get node performance metrics for {node_name}: {e}")
-            return {}
-    
-    async def _get_node_pod_metrics(self,
-                                  cluster_name: str,
-                                  node_name: str,
-                                  start_time: datetime,
-                                  end_time: datetime) -> Dict[str, Any]:
-        """Get pod metrics for a specific node."""
-        try:
-            hours = int((end_time - start_time).total_seconds() / 3600)
-            
-            pod_metrics_query = self.kusto_queries['pod_metrics_by_node'].format(
-                hours=hours,
-                cluster_name=cluster_name,
-                node_name=node_name
-            )
-            
-            response = await self._execute_kusto_query(pod_metrics_query, start_time, end_time)
-            
-            if response:
-                return self._parse_pod_metrics_data(response)
-            
-            return {}
-            
-        except Exception as e:
-            self.logger.error(f"Failed to get pod metrics for node {node_name}: {e}")
-            return {}
-    
-    async def _get_top_resource_consuming_pods(self,
-                                             cluster_name: str,
-                                             start_time: datetime,
-                                             end_time: datetime,
-                                             resource_type: str,
-                                             limit: int = 20) -> List[Dict[str, Any]]:
-        """Get top resource-consuming pods."""
-        try:
-            hours = int((end_time - start_time).total_seconds() / 3600)
-            
-            if resource_type == 'cpu':
-                counter_name = 'cpuUsageNanoCores'
-                resource_field = 'AvgCPU'
-            else:
-                counter_name = 'memoryWorkingSetBytes'
-                resource_field = 'AvgMemory'
-            
-            query = f'''
-                KubePodInventory
-                | where TimeGenerated >= ago({hours}h)
-                | where ClusterName == '{cluster_name}'
-                | join kind=inner (
-                    Perf
-                    | where ObjectName == 'K8SContainer'
-                    | where CounterName == '{counter_name}'
-                    | where TimeGenerated >= ago({hours}h)
-                    | summarize {resource_field} = avg(CounterValue) by InstanceName
-                ) on $left.PodUid == $right.InstanceName
-                | top {limit} by {resource_field} desc
-                | project PodName = Name, Namespace, {resource_field}, Node = Computer, PodStatus, ContainerName
-            '''
-            
-            response = await self._execute_kusto_query(query, start_time, end_time)
-            
-            if response:
-                return self._parse_top_consuming_pods(response, resource_type)
-            
-            return []
-            
-        except Exception as e:
-            self.logger.error(f"Failed to get top {resource_type} consuming pods: {e}")
-            return []
-    
-    async def _get_related_storage_account_metrics(self,
-                                                 cluster_resource_id: str,
-                                                 start_time: datetime,
-                                                 end_time: datetime,
-                                                 granularity: timedelta) -> Dict[str, Any]:
-        """Get metrics for storage accounts related to the cluster."""
-        try:
-            # Extract resource group from cluster resource ID
-            resource_group = cluster_resource_id.split('/')[4]
-            
-            # Build storage account resource IDs (this is a simplified approach)
-            # In practice, you'd need to discover storage accounts used by the cluster
-            storage_accounts = await self._discover_cluster_storage_accounts(resource_group)
-            
-            storage_metrics = {}
-            
-            for storage_account in storage_accounts:
-                storage_resource_id = f"/subscriptions/{self.subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.Storage/storageAccounts/{storage_account}"
-                
-                account_metrics = {}
-                for metric_name in self.storage_metrics:
-                    metric_data = await self._get_single_metric_data(
-                        storage_resource_id, metric_name, start_time, end_time, granularity
-                    )
-                    if metric_data:
-                        account_metrics[metric_name] = metric_data
-                
-                if account_metrics:
-                    storage_metrics[storage_account] = account_metrics
-            
-            return storage_metrics
-            
-        except Exception as e:
-            self.logger.debug(f"Failed to get storage account metrics: {e}")
-            return {}
-    
-    async def _get_load_balancer_metrics(self,
-                                       cluster_resource_id: str,
-                                       start_time: datetime,
-                                       end_time: datetime,
-                                       granularity: timedelta) -> Dict[str, Any]:
-        """Get load balancer metrics for the cluster."""
-        try:
-            # Extract resource group from cluster resource ID
-            resource_group = cluster_resource_id.split('/')[4]
-            
-            # Discover load balancers used by the cluster
-            load_balancers = await self._discover_cluster_load_balancers(resource_group)
-            
-            lb_metrics = {}
-            
-            for lb_name in load_balancers:
-                lb_resource_id = f"/subscriptions/{self.subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.Network/loadBalancers/{lb_name}"
-                
-                lb_data = {}
-                for metric_name in self.network_metrics:
-                    metric_data = await self._get_single_metric_data(
-                        lb_resource_id, metric_name, start_time, end_time, granularity
-                    )
-                    if metric_data:
-                        lb_data[metric_name] = metric_data
-                
-                if lb_data:
-                    lb_metrics[lb_name] = lb_data
-            
-            return lb_metrics
-            
-        except Exception as e:
-            self.logger.debug(f"Failed to get load balancer metrics: {e}")
-            return {}
+            self.logger.error(f"Failed to get AKS node VM metrics: {e}")
+            return {'error': str(e), 'data_points': 0}
     
     async def _execute_kusto_query(self, query: str, start_time: datetime, end_time: datetime) -> Any:
         """Execute a Kusto query against Log Analytics."""
         try:
             if not self._logs_client or not self.log_analytics_workspace_id:
                 return None
+            
+            self.logger.debug(f"Executing Kusto query: {query[:100]}...")
             
             response = self._logs_client.query_workspace(
                 workspace_id=self.log_analytics_workspace_id,
@@ -926,772 +576,840 @@ class MonitorClient(BaseClient):
             self.logger.debug(f"Query: {query}")
             return None
     
-    async def _discover_cluster_storage_accounts(self, resource_group: str) -> List[str]:
-        """Discover storage accounts used by the cluster."""
+    def _process_node_raw_metrics(self, response) -> Dict[str, Any]:
+        """Process raw node metrics response."""
+        node_metrics = {
+            'nodes': {},
+            'aggregated_metrics': {},
+            'data_points': 0,
+            'metric_types': set()
+        }
+        
+        if not response or not hasattr(response, 'tables') or not response.tables:
+            return node_metrics
+        
+        table = response.tables[0]
+        columns = self._extract_columns(table)
+        
+        if not hasattr(table, 'rows') or not table.rows:
+            return node_metrics
+        
+        for row in table.rows:
+            try:
+                row_data = self._extract_row_data(row, columns)
+                
+                timestamp = row_data.get('TimeGenerated')
+                computer = row_data.get('Computer', 'Unknown')
+                counter_name = row_data.get('CounterName', 'Unknown')
+                counter_value = self._safe_float(row_data.get('CounterValue'))
+                instance_name = row_data.get('InstanceName', '')
+                
+                if computer not in node_metrics['nodes']:
+                    node_metrics['nodes'][computer] = {
+                        'computer_name': computer,
+                        'metrics': {},
+                        'latest_timestamp': None
+                    }
+                
+                node_data = node_metrics['nodes'][computer]
+                
+                if counter_name not in node_data['metrics']:
+                    node_data['metrics'][counter_name] = {
+                        'values': [],
+                        'latest_value': None,
+                        'min_value': float('inf'),
+                        'max_value': float('-inf'),
+                        'avg_value': 0.0,
+                        'unit': self._get_metric_unit(counter_name)
+                    }
+                
+                metric_data = node_data['metrics'][counter_name]
+                metric_data['values'].append({
+                    'timestamp': timestamp,
+                    'value': counter_value,
+                    'instance': instance_name
+                })
+                
+                # Update statistics
+                if counter_value is not None:
+                    metric_data['latest_value'] = counter_value
+                    metric_data['min_value'] = min(metric_data['min_value'], counter_value)
+                    metric_data['max_value'] = max(metric_data['max_value'], counter_value)
+                    
+                    # Update running average
+                    values = [v['value'] for v in metric_data['values'] if v['value'] is not None]
+                    metric_data['avg_value'] = sum(values) / len(values) if values else 0.0
+                
+                node_data['latest_timestamp'] = timestamp
+                node_metrics['metric_types'].add(counter_name)
+                node_metrics['data_points'] += 1
+                
+            except Exception as e:
+                self.logger.warning(f"Error processing node metric row: {e}")
+                continue
+        
+        # Convert sets to lists
+        node_metrics['metric_types'] = list(node_metrics['metric_types'])
+        
+        # Calculate aggregated metrics across all nodes
+        node_metrics['aggregated_metrics'] = self._calculate_node_aggregations(node_metrics['nodes'])
+        
+        return node_metrics
+    
+    def _process_pod_raw_metrics(self, response) -> Dict[str, Any]:
+        """Process raw pod metrics response."""
+        pod_metrics = {
+            'pods': {},
+            'namespace_aggregations': {},
+            'data_points': 0,
+            'metric_types': set()
+        }
+        
+        if not response or not hasattr(response, 'tables') or not response.tables:
+            return pod_metrics
+        
+        table = response.tables[0]
+        columns = self._extract_columns(table)
+        
+        if not hasattr(table, 'rows') or not table.rows:
+            return pod_metrics
+        
+        for row in table.rows:
+            try:
+                row_data = self._extract_row_data(row, columns)
+                
+                timestamp = row_data.get('TimeGenerated')
+                pod_name = row_data.get('PodName', 'Unknown')
+                namespace = row_data.get('Namespace', 'Unknown')
+                computer = row_data.get('Computer', 'Unknown')
+                counter_name = row_data.get('CounterName', 'Unknown')
+                counter_value = self._safe_float(row_data.get('CounterValue'))
+                pod_status = row_data.get('PodStatus', 'Unknown')
+                service_name = row_data.get('ServiceName', '')
+                
+                pod_key = f"{namespace}/{pod_name}"
+                
+                if pod_key not in pod_metrics['pods']:
+                    pod_metrics['pods'][pod_key] = {
+                        'pod_name': pod_name,
+                        'namespace': namespace,
+                        'computer': computer,
+                        'pod_status': pod_status,
+                        'service_name': service_name,
+                        'metrics': {},
+                        'latest_timestamp': None
+                    }
+                
+                pod_data = pod_metrics['pods'][pod_key]
+                
+                if counter_name not in pod_data['metrics']:
+                    pod_data['metrics'][counter_name] = {
+                        'values': [],
+                        'latest_value': None,
+                        'min_value': float('inf'),
+                        'max_value': float('-inf'),
+                        'avg_value': 0.0,
+                        'unit': self._get_metric_unit(counter_name)
+                    }
+                
+                metric_data = pod_data['metrics'][counter_name]
+                metric_data['values'].append({
+                    'timestamp': timestamp,
+                    'value': counter_value
+                })
+                
+                # Update statistics
+                if counter_value is not None:
+                    metric_data['latest_value'] = counter_value
+                    metric_data['min_value'] = min(metric_data['min_value'], counter_value)
+                    metric_data['max_value'] = max(metric_data['max_value'], counter_value)
+                    
+                    values = [v['value'] for v in metric_data['values'] if v['value'] is not None]
+                    metric_data['avg_value'] = sum(values) / len(values) if values else 0.0
+                
+                pod_data['latest_timestamp'] = timestamp
+                pod_metrics['metric_types'].add(counter_name)
+                pod_metrics['data_points'] += 1
+                
+            except Exception as e:
+                self.logger.warning(f"Error processing pod metric row: {e}")
+                continue
+        
+        # Convert sets to lists
+        pod_metrics['metric_types'] = list(pod_metrics['metric_types'])
+        
+        # Calculate namespace aggregations
+        pod_metrics['namespace_aggregations'] = self._calculate_namespace_aggregations(pod_metrics['pods'])
+        
+        return pod_metrics
+    
+    def _process_container_raw_metrics(self, response) -> Dict[str, Any]:
+        """Process raw container metrics response."""
+        container_metrics = {
+            'containers': {},
+            'pod_aggregations': {},
+            'data_points': 0,
+            'metric_types': set()
+        }
+        
+        if not response or not hasattr(response, 'tables') or not response.tables:
+            return container_metrics
+        
+        table = response.tables[0]
+        columns = self._extract_columns(table)
+        
+        if not hasattr(table, 'rows') or not table.rows:
+            return container_metrics
+        
+        for row in table.rows:
+            try:
+                row_data = self._extract_row_data(row, columns)
+                
+                timestamp = row_data.get('TimeGenerated')
+                container_name = row_data.get('ContainerName', 'Unknown')
+                pod_name = row_data.get('PodName', 'Unknown')
+                namespace = row_data.get('Namespace_k8s', 'Unknown')
+                metric_name = row_data.get('Name', 'Unknown')
+                value = self._safe_float(row_data.get('Val'))
+                unit = "count"  # Default unit since Unit column may not exist
+                
+                container_key = f"{namespace}/{pod_name}/{container_name}"
+                
+                if container_key not in container_metrics['containers']:
+                    container_metrics['containers'][container_key] = {
+                        'container_name': container_name,
+                        'pod_name': pod_name,
+                        'namespace': namespace,
+                        'metrics': {},
+                        'latest_timestamp': None
+                    }
+                
+                container_data = container_metrics['containers'][container_key]
+                
+                if metric_name not in container_data['metrics']:
+                    container_data['metrics'][metric_name] = {
+                        'values': [],
+                        'latest_value': None,
+                        'min_value': float('inf'),
+                        'max_value': float('-inf'),
+                        'avg_value': 0.0,
+                        'unit': unit
+                    }
+                
+                metric_data = container_data['metrics'][metric_name]
+                metric_data['values'].append({
+                    'timestamp': timestamp,
+                    'value': value
+                })
+                
+                # Update statistics
+                if value is not None:
+                    metric_data['latest_value'] = value
+                    metric_data['min_value'] = min(metric_data['min_value'], value)
+                    metric_data['max_value'] = max(metric_data['max_value'], value)
+                    
+                    values = [v['value'] for v in metric_data['values'] if v['value'] is not None]
+                    metric_data['avg_value'] = sum(values) / len(values) if values else 0.0
+                
+                container_data['latest_timestamp'] = timestamp
+                container_metrics['metric_types'].add(metric_name)
+                container_metrics['data_points'] += 1
+                
+            except Exception as e:
+                self.logger.warning(f"Error processing container metric row: {e}")
+                continue
+        
+        # Convert sets to lists
+        container_metrics['metric_types'] = list(container_metrics['metric_types'])
+        
+        # Calculate pod-level aggregations
+        container_metrics['pod_aggregations'] = self._calculate_pod_aggregations(container_metrics['containers'])
+        
+        return container_metrics
+    
+    def _process_storage_raw_metrics(self, response) -> Dict[str, Any]:
+        """Process raw storage metrics response."""
+        storage_metrics = {
+            'storage_devices': {},
+            'cluster_storage_summary': {},
+            'data_points': 0,
+            'metric_types': set()
+        }
+        
+        if not response or not hasattr(response, 'tables') or not response.tables:
+            return storage_metrics
+        
+        table = response.tables[0]
+        columns = self._extract_columns(table)
+        
+        if not hasattr(table, 'rows') or not table.rows:
+            return storage_metrics
+        
+        for row in table.rows:
+            try:
+                row_data = self._extract_row_data(row, columns)
+                
+                timestamp = row_data.get('TimeGenerated')
+                cluster_name = row_data.get('ClusterName', 'Unknown')
+                computer = row_data.get('Computer', 'Unknown')
+                device = row_data.get('Device', 'Unknown')
+                metric_name = row_data.get('Name', 'Unknown')
+                value = self._safe_float(row_data.get('Val'))
+                unit = self._get_storage_metric_unit(metric_name)  # Determine unit from metric name
+                
+                device_key = f"{computer}/{device}"
+                
+                if device_key not in storage_metrics['storage_devices']:
+                    storage_metrics['storage_devices'][device_key] = {
+                        'computer': computer,
+                        'device': device,
+                        'cluster_name': cluster_name,
+                        'metrics': {},
+                        'latest_timestamp': None
+                    }
+                
+                device_data = storage_metrics['storage_devices'][device_key]
+                
+                if metric_name not in device_data['metrics']:
+                    device_data['metrics'][metric_name] = {
+                        'values': [],
+                        'latest_value': None,
+                        'min_value': float('inf'),
+                        'max_value': float('-inf'),
+                        'avg_value': 0.0,
+                        'unit': unit
+                    }
+                
+                metric_data = device_data['metrics'][metric_name]
+                metric_data['values'].append({
+                    'timestamp': timestamp,
+                    'value': value
+                })
+                
+                # Update statistics
+                if value is not None:
+                    metric_data['latest_value'] = value
+                    metric_data['min_value'] = min(metric_data['min_value'], value)
+                    metric_data['max_value'] = max(metric_data['max_value'], value)
+                    
+                    values = [v['value'] for v in metric_data['values'] if v['value'] is not None]
+                    metric_data['avg_value'] = sum(values) / len(values) if values else 0.0
+                
+                device_data['latest_timestamp'] = timestamp
+                storage_metrics['metric_types'].add(metric_name)
+                storage_metrics['data_points'] += 1
+                
+            except Exception as e:
+                self.logger.warning(f"Error processing storage metric row: {e}")
+                continue
+        
+        # Convert sets to lists
+        storage_metrics['metric_types'] = list(storage_metrics['metric_types'])
+        
+        # Calculate cluster storage summary
+        storage_metrics['cluster_storage_summary'] = self._calculate_storage_summary(storage_metrics['storage_devices'])
+        
+        return storage_metrics
+    
+    def _process_network_raw_metrics(self, response) -> Dict[str, Any]:
+        """Process raw network metrics response."""
+        network_metrics = {
+            'network_interfaces': {},
+            'cluster_network_summary': {},
+            'data_points': 0,
+            'metric_types': set()
+        }
+        
+        if not response or not hasattr(response, 'tables') or not response.tables:
+            return network_metrics
+        
+        table = response.tables[0]
+        columns = self._extract_columns(table)
+        
+        if not hasattr(table, 'rows') or not table.rows:
+            return network_metrics
+        
+        for row in table.rows:
+            try:
+                row_data = self._extract_row_data(row, columns)
+                
+                timestamp = row_data.get('TimeGenerated')
+                cluster_name = row_data.get('ClusterName', 'Unknown')
+                computer = row_data.get('Computer', 'Unknown')
+                interface = row_data.get('Interface', 'Unknown')
+                metric_name = row_data.get('Name', 'Unknown')
+                value = self._safe_float(row_data.get('Val'))
+                unit = self._get_network_metric_unit(metric_name)  # Determine unit from metric name
+                
+                interface_key = f"{computer}/{interface}"
+                
+                if interface_key not in network_metrics['network_interfaces']:
+                    network_metrics['network_interfaces'][interface_key] = {
+                        'computer': computer,
+                        'interface': interface,
+                        'cluster_name': cluster_name,
+                        'metrics': {},
+                        'latest_timestamp': None
+                    }
+                
+                interface_data = network_metrics['network_interfaces'][interface_key]
+                
+                if metric_name not in interface_data['metrics']:
+                    interface_data['metrics'][metric_name] = {
+                        'values': [],
+                        'latest_value': None,
+                        'min_value': float('inf'),
+                        'max_value': float('-inf'),
+                        'avg_value': 0.0,
+                        'unit': unit
+                    }
+                
+                metric_data = interface_data['metrics'][metric_name]
+                metric_data['values'].append({
+                    'timestamp': timestamp,
+                    'value': value
+                })
+                
+                # Update statistics
+                if value is not None:
+                    metric_data['latest_value'] = value
+                    metric_data['min_value'] = min(metric_data['min_value'], value)
+                    metric_data['max_value'] = max(metric_data['max_value'], value)
+                    
+                    values = [v['value'] for v in metric_data['values'] if v['value'] is not None]
+                    metric_data['avg_value'] = sum(values) / len(values) if values else 0.0
+                
+                interface_data['latest_timestamp'] = timestamp
+                network_metrics['metric_types'].add(metric_name)
+                network_metrics['data_points'] += 1
+                
+            except Exception as e:
+                self.logger.warning(f"Error processing network metric row: {e}")
+                continue
+        
+        # Convert sets to lists
+        network_metrics['metric_types'] = list(network_metrics['metric_types'])
+        
+        # Calculate cluster network summary
+        network_metrics['cluster_network_summary'] = self._calculate_network_summary(network_metrics['network_interfaces'])
+        
+        return network_metrics
+    
+    # Helper methods
+    def _extract_columns(self, table) -> List[str]:
+        """Extract column names from table."""
+        columns = []
+        if hasattr(table, 'columns') and table.columns:
+            for col in table.columns:
+                if hasattr(col, 'name'):
+                    columns.append(col.name)
+                elif isinstance(col, str):
+                    columns.append(col)
+                else:
+                    columns.append(str(col))
+        return columns
+    
+    def _extract_row_data(self, row, columns: List[str]) -> Dict[str, Any]:
+        """Extract row data into dictionary."""
+        row_dict = {}
+        row_data = row if isinstance(row, (list, tuple)) else [row]
+        
+        for idx, value in enumerate(row_data):
+            if idx < len(columns):
+                row_dict[columns[idx]] = value
+        
+        return row_dict
+    
+    def _safe_float(self, value) -> Optional[float]:
+        """Safely convert value to float."""
         try:
-            # This is a simplified implementation
-            # In practice, you'd query the cluster's storage classes and persistent volumes
-            # to identify the actual storage accounts being used
-            
-            # For now, return common storage account naming patterns
-            return []  # Would contain actual storage account names
-            
-        except Exception as e:
-            self.logger.debug(f"Failed to discover storage accounts: {e}")
-            return []
+            return float(value) if value is not None else None
+        except (ValueError, TypeError):
+            return None
     
-    async def _discover_cluster_load_balancers(self, resource_group: str) -> List[str]:
-        """Discover load balancers used by the cluster."""
-        try:
-            # This is a simplified implementation
-            # In practice, you'd query the cluster's services to identify load balancers
-            
-            # For now, return common load balancer naming patterns
-            return []  # Would contain actual load balancer names
-            
-        except Exception as e:
-            self.logger.debug(f"Failed to discover load balancers: {e}")
-            return []
+    def _get_metric_unit(self, counter_name: str) -> str:
+        """Get appropriate unit for metric."""
+        counter_lower = counter_name.lower()
+        if 'nanocores' in counter_lower:
+            return 'nanocores'
+        elif 'bytes' in counter_lower:
+            return 'bytes'
+        elif 'percent' in counter_lower:
+            return 'percent'
+        elif 'seconds' in counter_lower:
+            return 'seconds'
+        else:
+            return 'count'
     
-    # Data parsing methods
-    def _parse_node_inventory(self, response) -> List[Dict[str, Any]]:
-        """Parse node inventory response."""
-        nodes = []
-        
-        if response and hasattr(response, 'tables') and response.tables and len(response.tables) > 0:
-            table = response.tables[0]
-            
-            # Safely extract column names
-            columns = []
-            if hasattr(table, 'columns') and table.columns:
-                for col in table.columns:
-                    if hasattr(col, 'name'):
-                        columns.append(col.name)
-                    elif isinstance(col, str):
-                        columns.append(col)
-                    else:
-                        columns.append(str(col))
-            
-            # Process rows
-            if hasattr(table, 'rows') and table.rows:
-                for row in table.rows:
-                    row_dict = {}
-                    row_data = row if isinstance(row, (list, tuple)) else [row]
-                    
-                    for idx, value in enumerate(row_data):
-                        if idx < len(columns):
-                            row_dict[columns[idx]] = value
-                    
-                    node_info = {
-                        'computer': row_dict.get('Computer', ''),
-                        'status': row_dict.get('Status', 'Unknown'),
-                        'kubelet_version': row_dict.get('KubeletVersion', ''),
-                        'kube_proxy_version': row_dict.get('KubeProxyVersion', ''),
-                        'creation_timestamp': row_dict.get('CreationTimeStamp', '')
-                    }
-                    
-                    # Only add if we have at least the computer name
-                    if node_info['computer']:
-                        nodes.append(node_info)
-        
-        return nodes
+    def _get_storage_metric_unit(self, metric_name: str) -> str:
+        """Get appropriate unit for storage metrics."""
+        metric_lower = metric_name.lower()
+        if 'bytes' in metric_lower:
+            return 'bytes'
+        elif 'percent' in metric_lower:
+            return 'percent'
+        elif 'inodes' in metric_lower:
+            return 'count'
+        else:
+            return 'count'
     
-    def _parse_node_performance_data(self, response) -> Dict[str, Any]:
-        """Parse node performance data."""
-        performance_data = {
-            'cpu_usage': [],
-            'memory_usage': [],
-            'cpu_capacity': [],
-            'memory_capacity': [],
-            'filesystem_usage': [],
-            'filesystem_available': []
+    def _get_network_metric_unit(self, metric_name: str) -> str:
+        """Get appropriate unit for network metrics."""
+        metric_lower = metric_name.lower()
+        if 'bytes' in metric_lower:
+            return 'bytes'
+        elif 'packets' in metric_lower:
+            return 'packets'
+        elif 'errors' in metric_lower or 'dropped' in metric_lower:
+            return 'count'
+        else:
+            return 'count'
+    
+    def _calculate_node_aggregations(self, nodes: Dict[str, Any]) -> Dict[str, Any]:
+        """Calculate aggregated metrics across all nodes."""
+        aggregations = {
+            'total_nodes': len(nodes),
+            'metrics_summary': {},
+            'cluster_totals': {}
         }
         
-        if response and hasattr(response, 'tables') and response.tables and len(response.tables) > 0:
-            table = response.tables[0]
+        # Aggregate metrics across all nodes
+        all_metrics = set()
+        for node_data in nodes.values():
+            all_metrics.update(node_data['metrics'].keys())
+        
+        for metric_name in all_metrics:
+            metric_values = []
+            for node_data in nodes.values():
+                if metric_name in node_data['metrics'] and node_data['metrics'][metric_name]['latest_value'] is not None:
+                    metric_values.append(node_data['metrics'][metric_name]['latest_value'])
             
-            # Safely extract column names
-            columns = []
-            if hasattr(table, 'columns') and table.columns:
-                for col in table.columns:
-                    if hasattr(col, 'name'):
-                        columns.append(col.name)
-                    elif isinstance(col, str):
-                        columns.append(col)
-                    else:
-                        columns.append(str(col))
+            if metric_values:
+                aggregations['metrics_summary'][metric_name] = {
+                    'cluster_average': sum(metric_values) / len(metric_values),
+                    'cluster_total': sum(metric_values),
+                    'cluster_max': max(metric_values),
+                    'cluster_min': min(metric_values),
+                    'node_count': len(metric_values)
+                }
+        
+        return aggregations
+    
+    def _calculate_namespace_aggregations(self, pods: Dict[str, Any]) -> Dict[str, Any]:
+        """Calculate aggregated metrics by namespace."""
+        namespace_aggs = {}
+        
+        for pod_data in pods.values():
+            namespace = pod_data['namespace']
+            if namespace not in namespace_aggs:
+                namespace_aggs[namespace] = {
+                    'pod_count': 0,
+                    'metrics_summary': {}
+                }
             
-            # Process rows
-            if hasattr(table, 'rows') and table.rows:
-                for row in table.rows:
-                    row_dict = {}
-                    row_data = row if isinstance(row, (list, tuple)) else [row]
-                    
-                    for idx, value in enumerate(row_data):
-                        if idx < len(columns):
-                            row_dict[columns[idx]] = value
-                    
-                    counter_name = row_dict.get('CounterName', '')
-                    data_point = {
-                        'timestamp': row_dict.get('TimeGenerated'),
-                        'average': float(row_dict.get('AvgValue', 0)) if row_dict.get('AvgValue') is not None else 0,
-                        'maximum': float(row_dict.get('MaxValue', 0)) if row_dict.get('MaxValue') is not None else 0,
-                        'minimum': float(row_dict.get('MinValue', 0)) if row_dict.get('MinValue') is not None else 0,
-                        'count': int(row_dict.get('Count', 0)) if row_dict.get('Count') is not None else 0
+            namespace_aggs[namespace]['pod_count'] += 1
+            
+            # Aggregate metrics for this namespace
+            for metric_name, metric_data in pod_data['metrics'].items():
+                if metric_name not in namespace_aggs[namespace]['metrics_summary']:
+                    namespace_aggs[namespace]['metrics_summary'][metric_name] = {
+                        'values': [],
+                        'total': 0.0,
+                        'average': 0.0,
+                        'max': float('-inf'),
+                        'min': float('inf')
                     }
-                    
-                    if 'cpuUsageNanoCores' in counter_name:
-                        performance_data['cpu_usage'].append(data_point)
-                    elif 'memoryWorkingSetBytes' in counter_name:
-                        performance_data['memory_usage'].append(data_point)
-                    elif 'cpuCapacityNanoCores' in counter_name:
-                        performance_data['cpu_capacity'].append(data_point)
-                    elif 'memoryCapacityBytes' in counter_name:
-                        performance_data['memory_capacity'].append(data_point)
-                    elif 'fsUsedBytes' in counter_name:
-                        performance_data['filesystem_usage'].append(data_point)
-                    elif 'fsAvailBytes' in counter_name:
-                        performance_data['filesystem_available'].append(data_point)
+                
+                if metric_data['latest_value'] is not None:
+                    ns_metric = namespace_aggs[namespace]['metrics_summary'][metric_name]
+                    ns_metric['values'].append(metric_data['latest_value'])
+                    ns_metric['total'] += metric_data['latest_value']
+                    ns_metric['max'] = max(ns_metric['max'], metric_data['latest_value'])
+                    ns_metric['min'] = min(ns_metric['min'], metric_data['latest_value'])
         
-        return performance_data
+        # Calculate averages
+        for namespace_data in namespace_aggs.values():
+            for metric_data in namespace_data['metrics_summary'].values():
+                if metric_data['values']:
+                    metric_data['average'] = metric_data['total'] / len(metric_data['values'])
+        
+        return namespace_aggs
     
-    def _parse_pod_metrics_data(self, response) -> Dict[str, Any]:
-        """Parse pod metrics data for a node."""
-        pod_data = {
-            'pods': [],
-            'summary': {
-                'total_pods': 0,
-                'total_cpu_usage': 0,
-                'total_memory_usage': 0,
-                'avg_cpu_per_pod': 0,
-                'avg_memory_per_pod': 0
-            }
-        }
+    def _calculate_pod_aggregations(self, containers: Dict[str, Any]) -> Dict[str, Any]:
+        """Calculate pod-level aggregations from container metrics."""
+        pod_aggs = {}
         
-        if response and hasattr(response, 'tables') and response.tables and len(response.tables) > 0:
-            table = response.tables[0]
+        for container_data in containers.values():
+            pod_key = f"{container_data['namespace']}/{container_data['pod_name']}"
+            if pod_key not in pod_aggs:
+                pod_aggs[pod_key] = {
+                    'namespace': container_data['namespace'],
+                    'pod_name': container_data['pod_name'],
+                    'container_count': 0,
+                    'metrics_summary': {}
+                }
             
-            # Safely extract column names
-            columns = []
-            if hasattr(table, 'columns') and table.columns:
-                for col in table.columns:
-                    if hasattr(col, 'name'):
-                        columns.append(col.name)
-                    elif isinstance(col, str):
-                        columns.append(col)
-                    else:
-                        columns.append(str(col))
+            pod_aggs[pod_key]['container_count'] += 1
             
-            pods_seen = set()
-            total_cpu = 0
-            total_memory = 0
-            
-            # Process rows
-            if hasattr(table, 'rows') and table.rows:
-                for row in table.rows:
-                    row_dict = {}
-                    row_data = row if isinstance(row, (list, tuple)) else [row]
-                    
-                    for idx, value in enumerate(row_data):
-                        if idx < len(columns):
-                            row_dict[columns[idx]] = value
-                    
-                    pod_name = row_dict.get('PodName', '')
-                    namespace = row_dict.get('Namespace', '')
-                    pod_key = f"{namespace}/{pod_name}"
-                    
-                    if pod_key not in pods_seen and pod_name:
-                        pods_seen.add(pod_key)
-                        
-                        # Safely convert numeric values
-                        cpu_usage = 0
-                        memory_usage = 0
-                        
-                        try:
-                            cpu_val = row_dict.get('AvgCPU')
-                            if cpu_val is not None:
-                                cpu_usage = float(cpu_val)
-                        except (ValueError, TypeError):
-                            cpu_usage = 0
-                        
-                        try:
-                            memory_val = row_dict.get('AvgMemory')
-                            if memory_val is not None:
-                                memory_usage = float(memory_val)
-                        except (ValueError, TypeError):
-                            memory_usage = 0
-                        
-                        pod_info = {
-                            'pod_name': pod_name,
-                            'namespace': namespace,
-                            'cpu_usage_nanocores': cpu_usage,
-                            'cpu_usage_millicores': cpu_usage / 1000000 if cpu_usage else 0,
-                            'memory_usage_bytes': memory_usage,
-                            'memory_usage_mb': memory_usage / (1024 * 1024) if memory_usage else 0,
-                            'timestamp': row_dict.get('TimeGenerated')
-                        }
-                        
-                        pod_data['pods'].append(pod_info)
-                        total_cpu += cpu_usage
-                        total_memory += memory_usage
-            
-            # Calculate summary
-            pod_count = len(pods_seen)
-            pod_data['summary'] = {
-                'total_pods': pod_count,
-                'total_cpu_usage': total_cpu,
-                'total_memory_usage': total_memory,
-                'avg_cpu_per_pod': total_cpu / pod_count if pod_count > 0 else 0,
-                'avg_memory_per_pod': total_memory / pod_count if pod_count > 0 else 0
-            }
-        
-        return pod_data
-    
-    def _parse_top_consuming_pods(self, response, resource_type: str) -> List[Dict[str, Any]]:
-        """Parse top consuming pods response."""
-        pods = []
-        
-        if response and hasattr(response, 'tables') and response.tables and len(response.tables) > 0:
-            table = response.tables[0]
-            
-            # Safely extract column names
-            columns = []
-            if hasattr(table, 'columns') and table.columns:
-                for col in table.columns:
-                    if hasattr(col, 'name'):
-                        columns.append(col.name)
-                    elif isinstance(col, str):
-                        columns.append(col)
-                    else:
-                        columns.append(str(col))
-            
-            # Process rows
-            if hasattr(table, 'rows') and table.rows:
-                for row in table.rows:
-                    row_dict = {}
-                    row_data = row if isinstance(row, (list, tuple)) else [row]
-                    
-                    for idx, value in enumerate(row_data):
-                        if idx < len(columns):
-                            row_dict[columns[idx]] = value
-                    
-                    pod_info = {
-                        'pod_name': row_dict.get('PodName', ''),
-                        'namespace': row_dict.get('Namespace', ''),
-                        'node': row_dict.get('Node', ''),
-                        'pod_status': row_dict.get('PodStatus', ''),
-                        'container_name': row_dict.get('ContainerName', ''),
-                        'resource_type': resource_type
+            # Aggregate container metrics to pod level
+            for metric_name, metric_data in container_data['metrics'].items():
+                if metric_name not in pod_aggs[pod_key]['metrics_summary']:
+                    pod_aggs[pod_key]['metrics_summary'][metric_name] = {
+                        'total': 0.0,
+                        'average': 0.0,
+                        'max': float('-inf'),
+                        'min': float('inf'),
+                        'container_count': 0
                     }
-                    
-                    if resource_type == 'cpu':
-                        try:
-                            cpu_value = float(row_dict.get('AvgCPU', 0)) if row_dict.get('AvgCPU') is not None else 0
-                            pod_info['avg_cpu_nanocores'] = cpu_value
-                            pod_info['avg_cpu_millicores'] = cpu_value / 1000000 if cpu_value else 0
-                        except (ValueError, TypeError):
-                            pod_info['avg_cpu_nanocores'] = 0
-                            pod_info['avg_cpu_millicores'] = 0
-                    else:
-                        try:
-                            memory_value = float(row_dict.get('AvgMemory', 0)) if row_dict.get('AvgMemory') is not None else 0
-                            pod_info['avg_memory_bytes'] = memory_value
-                            pod_info['avg_memory_mb'] = memory_value / (1024 * 1024) if memory_value else 0
-                        except (ValueError, TypeError):
-                            pod_info['avg_memory_bytes'] = 0
-                            pod_info['avg_memory_mb'] = 0
-                    
-                    # Only add if we have meaningful data
-                    if pod_info['pod_name']:
-                        pods.append(pod_info)
+                
+                if metric_data['latest_value'] is not None:
+                    pod_metric = pod_aggs[pod_key]['metrics_summary'][metric_name]
+                    pod_metric['total'] += metric_data['latest_value']
+                    pod_metric['max'] = max(pod_metric['max'], metric_data['latest_value'])
+                    pod_metric['min'] = min(pod_metric['min'], metric_data['latest_value'])
+                    pod_metric['container_count'] += 1
         
-        return pods
+        # Calculate averages
+        for pod_data in pod_aggs.values():
+            for metric_data in pod_data['metrics_summary'].values():
+                if metric_data['container_count'] > 0:
+                    metric_data['average'] = metric_data['total'] / metric_data['container_count']
+        
+        return pod_aggs
     
-    def _parse_storage_metrics(self, response) -> Dict[str, Any]:
-        """Parse storage metrics response."""
-        storage_data = {
-            'disk_usage': [],
-            'disk_available': [],
-            'disk_utilization_percent': [],
-            'summary': {
-                'avg_usage_percent': 0,
-                'max_usage_percent': 0,
-                'total_used_bytes': 0,
-                'total_available_bytes': 0
-            }
-        }
-        
-        if response and hasattr(response, 'tables') and response.tables and len(response.tables) > 0:
-            table = response.tables[0]
-            
-            # Safely extract column names
-            columns = []
-            if hasattr(table, 'columns') and table.columns:
-                for col in table.columns:
-                    if hasattr(col, 'name'):
-                        columns.append(col.name)
-                    elif isinstance(col, str):
-                        columns.append(col)
-                    else:
-                        columns.append(str(col))
-            
-            usage_values = []
-            
-            # Process rows
-            if hasattr(table, 'rows') and table.rows:
-                for row in table.rows:
-                    row_dict = {}
-                    row_data = row if isinstance(row, (list, tuple)) else [row]
-                    
-                    for idx, value in enumerate(row_data):
-                        if idx < len(columns):
-                            row_dict[columns[idx]] = value
-                    
-                    metric_name = row_dict.get('Name', '')
-                    
-                    # Safely convert numeric values
-                    try:
-                        avg_val = float(row_dict.get('AvgValue', 0)) if row_dict.get('AvgValue') is not None else 0
-                        max_val = float(row_dict.get('MaxValue', 0)) if row_dict.get('MaxValue') is not None else 0
-                        min_val = float(row_dict.get('MinValue', 0)) if row_dict.get('MinValue') is not None else 0
-                    except (ValueError, TypeError):
-                        avg_val = max_val = min_val = 0
-                    
-                    data_point = {
-                        'timestamp': row_dict.get('TimeGenerated'),
-                        'average': avg_val,
-                        'maximum': max_val,
-                        'minimum': min_val
-                    }
-                    
-                    if 'used_bytes' in metric_name:
-                        storage_data['disk_usage'].append(data_point)
-                    elif 'free_bytes' in metric_name:
-                        storage_data['disk_available'].append(data_point)
-                    elif 'used_percent' in metric_name:
-                        storage_data['disk_utilization_percent'].append(data_point)
-                        usage_values.append(avg_val)
-            
-            # Calculate summary
-            if usage_values:
-                storage_data['summary']['avg_usage_percent'] = sum(usage_values) / len(usage_values)
-                storage_data['summary']['max_usage_percent'] = max(usage_values)
-        
-        return storage_data
-    
-    def _parse_network_metrics(self, response) -> Dict[str, Any]:
-        """Parse network metrics response."""
-        network_data = {
-            'rx_bytes': [],
-            'tx_bytes': [],
-            'rx_dropped': [],
-            'tx_dropped': [],
-            'summary': {
-                'total_rx_bytes': 0,
-                'total_tx_bytes': 0,
-                'total_dropped_packets': 0,
-                'avg_throughput_mbps': 0
-            }
-        }
-        
-        if response and hasattr(response, 'tables') and response.tables and len(response.tables) > 0:
-            table = response.tables[0]
-            
-            # Safely extract column names
-            columns = []
-            if hasattr(table, 'columns') and table.columns:
-                for col in table.columns:
-                    if hasattr(col, 'name'):
-                        columns.append(col.name)
-                    elif isinstance(col, str):
-                        columns.append(col)
-                    else:
-                        columns.append(str(col))
-            
-            total_rx = 0
-            total_tx = 0
-            total_dropped = 0
-            
-            # Process rows
-            if hasattr(table, 'rows') and table.rows:
-                for row in table.rows:
-                    row_dict = {}
-                    row_data = row if isinstance(row, (list, tuple)) else [row]
-                    
-                    for idx, value in enumerate(row_data):
-                        if idx < len(columns):
-                            row_dict[columns[idx]] = value
-                    
-                    metric_name = row_dict.get('Name', '')
-                    
-                    # Safely convert numeric values
-                    try:
-                        avg_val = float(row_dict.get('AvgValue', 0)) if row_dict.get('AvgValue') is not None else 0
-                        max_val = float(row_dict.get('MaxValue', 0)) if row_dict.get('MaxValue') is not None else 0
-                        total_val = float(row_dict.get('TotalValue', 0)) if row_dict.get('TotalValue') is not None else 0
-                    except (ValueError, TypeError):
-                        avg_val = max_val = total_val = 0
-                    
-                    data_point = {
-                        'timestamp': row_dict.get('TimeGenerated'),
-                        'average': avg_val,
-                        'maximum': max_val,
-                        'total': total_val
-                    }
-                    
-                    if 'rx_bytes' in metric_name:
-                        network_data['rx_bytes'].append(data_point)
-                        total_rx += total_val
-                    elif 'tx_bytes' in metric_name:
-                        network_data['tx_bytes'].append(data_point)
-                        total_tx += total_val
-                    elif 'dropped' in metric_name:
-                        if 'rx_dropped' in metric_name:
-                            network_data['rx_dropped'].append(data_point)
-                        else:
-                            network_data['tx_dropped'].append(data_point)
-                        total_dropped += total_val
-            
-            # Calculate summary
-            network_data['summary'] = {
-                'total_rx_bytes': total_rx,
-                'total_tx_bytes': total_tx,
-                'total_dropped_packets': total_dropped,
-                'avg_throughput_mbps': (total_rx + total_tx) / (1024 * 1024) / 3600  # Rough estimate
-            }
-        
-        
-        
-        return network_data
-    
-    def _parse_pod_requests_limits(self, response) -> Dict[str, Any]:
-        """Parse pod resource requests and limits."""
-        requests_limits = {
-            'pods': [],
-            'summary': {
-                'total_pods': 0,
-                'pods_with_requests': 0,
-                'pods_with_limits': 0,
-                'pods_without_requests': 0
-            }
-        }
-        
-        if response and hasattr(response, 'tables') and response.tables and len(response.tables) > 0:
-            table = response.tables[0]
-            
-            # Safely extract column names
-            columns = []
-            if hasattr(table, 'columns') and table.columns:
-                for col in table.columns:
-                    if hasattr(col, 'name'):
-                        columns.append(col.name)
-                    elif isinstance(col, str):
-                        columns.append(col)
-                    else:
-                        columns.append(str(col))
-            
-            # Process rows
-            if hasattr(table, 'rows') and table.rows:
-                for row in table.rows:
-                    row_dict = {}
-                    row_data = row if isinstance(row, (list, tuple)) else [row]
-                    
-                    for idx, value in enumerate(row_data):
-                        if idx < len(columns):
-                            row_dict[columns[idx]] = value
-                    
-                    # Safely convert restart count
-                    restart_count = 0
-                    try:
-                        restart_val = row_dict.get('PodRestartCount')
-                        if restart_val is not None:
-                            restart_count = int(restart_val)
-                    except (ValueError, TypeError):
-                        restart_count = 0
-                    
-                    pod_info = {
-                        'pod_name': row_dict.get('PodName', ''),
-                        'namespace': row_dict.get('Namespace', ''),
-                        'node': row_dict.get('Computer', ''),
-                        'pod_status': row_dict.get('PodStatus', ''),
-                        'creation_timestamp': row_dict.get('PodCreationTimeStamp', ''),
-                        'container_name': row_dict.get('ContainerName', ''),
-                        'container_id': row_dict.get('ContainerID', ''),
-                        'restart_count': restart_count
-                    }
-                    
-                    # Only add if we have meaningful data
-                    if pod_info['pod_name']:
-                        requests_limits['pods'].append(pod_info)
-            
-            # Calculate summary
-            requests_limits['summary']['total_pods'] = len(requests_limits['pods'])
-        
-        return requests_limits
-    
-    def _parse_cluster_events(self, response) -> Dict[str, Any]:
-        """Parse cluster events response."""
-        events_data = {
-            'warning_events': [],
-            'error_events': [],
-            'summary': {
-                'total_warnings': 0,
-                'total_errors': 0,
-                'most_frequent_issues': []
-            }
-        }
-        
-        if response and hasattr(response, 'tables') and response.tables and len(response.tables) > 0:
-            table = response.tables[0]
-            
-            # Safely extract column names
-            columns = []
-            if hasattr(table, 'columns') and table.columns:
-                for col in table.columns:
-                    if hasattr(col, 'name'):
-                        columns.append(col.name)
-                    elif isinstance(col, str):
-                        columns.append(col)
-                    else:
-                        columns.append(str(col))
-            
-            warnings = 0
-            errors = 0
-            
-            # Process rows
-            if hasattr(table, 'rows') and table.rows:
-                for row in table.rows:
-                    row_dict = {}
-                    row_data = row if isinstance(row, (list, tuple)) else [row]
-                    
-                    for idx, value in enumerate(row_data):
-                        if idx < len(columns):
-                            row_dict[columns[idx]] = value
-                    
-                    # Safely convert event count
-                    event_count = 0
-                    try:
-                        count_val = row_dict.get('EventCount')
-                        if count_val is not None:
-                            event_count = int(count_val)
-                    except (ValueError, TypeError):
-                        event_count = 0
-                    
-                    event_info = {
-                        'object_kind': row_dict.get('ObjectKind', ''),
-                        'reason': row_dict.get('Reason', ''),
-                        'message': row_dict.get('Message', ''),
-                        'event_count': event_count,
-                        'first_seen': row_dict.get('FirstSeen', ''),
-                        'last_seen': row_dict.get('LastSeen', '')
-                    }
-                    
-                    # Categorize by severity based on reason
-                    reason_lower = event_info['reason'].lower()
-                    if any(keyword in reason_lower for keyword in ['failed', 'error', 'kill']):
-                        events_data['error_events'].append(event_info)
-                        errors += event_count
-                    else:
-                        events_data['warning_events'].append(event_info)
-                        warnings += event_count
-            
-            # Sort by event count to get most frequent issues
-            all_events = events_data['warning_events'] + events_data['error_events']
-            most_frequent = sorted(all_events, key=lambda x: x['event_count'], reverse=True)[:5]
-            
-            events_data['summary'] = {
-                'total_warnings': warnings,
-                'total_errors': errors,
-                'most_frequent_issues': most_frequent
-            }
-        
-        return events_data
-    
-    def _calculate_cluster_summary(self, cluster_metrics: Dict[str, Any]) -> Dict[str, Any]:
-        """Calculate cluster-level summary statistics."""
+    def _calculate_storage_summary(self, storage_devices: Dict[str, Any]) -> Dict[str, Any]:
+        """Calculate cluster storage summary."""
         summary = {
-            'cpu_summary': {},
-            'memory_summary': {},
-            'network_summary': {},
-            'overall_health': 'unknown'
+            'total_devices': len(storage_devices),
+            'total_capacity_bytes': 0.0,
+            'total_used_bytes': 0.0,
+            'total_free_bytes': 0.0,
+            'average_utilization_percent': 0.0,
+            'device_utilizations': []
         }
         
-        # CPU summary
-        cpu_metrics = cluster_metrics.get('cpu_metrics', {})
-        if cpu_metrics:
-            all_cpu_values = []
-            for metric_data in cpu_metrics.values():
-                if isinstance(metric_data, list):
-                    values = [point.get('average', 0) for point in metric_data if point.get('average') is not None]
-                    all_cpu_values.extend(values)
+        utilization_values = []
+        
+        for device_data in storage_devices.values():
+            metrics = device_data['metrics']
             
-            if all_cpu_values:
-                summary['cpu_summary'] = {
-                    'average_utilization': sum(all_cpu_values) / len(all_cpu_values),
-                    'peak_utilization': max(all_cpu_values),
-                    'min_utilization': min(all_cpu_values),
-                    'data_points': len(all_cpu_values)
-                }
-        
-        # Memory summary
-        memory_metrics = cluster_metrics.get('memory_metrics', {})
-        if memory_metrics:
-            all_memory_values = []
-            for metric_data in memory_metrics.values():
-                if isinstance(metric_data, list):
-                    values = [point.get('average', 0) for point in metric_data if point.get('average') is not None]
-                    all_memory_values.extend(values)
+            # Get latest values
+            used_bytes = metrics.get('used_bytes', {}).get('latest_value', 0) or 0
+            free_bytes = metrics.get('free_bytes', {}).get('latest_value', 0) or 0
+            capacity_bytes = metrics.get('capacity_bytes', {}).get('latest_value', 0) or 0
+            used_percent = metrics.get('used_percent', {}).get('latest_value', 0) or 0
             
-            if all_memory_values:
-                summary['memory_summary'] = {
-                    'average_utilization': sum(all_memory_values) / len(all_memory_values),
-                    'peak_utilization': max(all_memory_values),
-                    'min_utilization': min(all_memory_values),
-                    'data_points': len(all_memory_values)
-                }
+            summary['total_used_bytes'] += used_bytes
+            summary['total_free_bytes'] += free_bytes
+            summary['total_capacity_bytes'] += capacity_bytes
+            
+            if used_percent > 0:
+                utilization_values.append(used_percent)
+                summary['device_utilizations'].append({
+                    'device': device_data['device'],
+                    'computer': device_data['computer'],
+                    'utilization_percent': used_percent,
+                    'used_bytes': used_bytes,
+                    'capacity_bytes': capacity_bytes
+                })
         
-        # Overall health assessment
-        cpu_avg = summary.get('cpu_summary', {}).get('average_utilization', 0)
-        memory_avg = summary.get('memory_summary', {}).get('average_utilization', 0)
-        
-        if cpu_avg > 80 or memory_avg > 85:
-            summary['overall_health'] = 'critical'
-        elif cpu_avg > 60 or memory_avg > 70:
-            summary['overall_health'] = 'warning'
-        elif cpu_avg > 0 and memory_avg > 0:
-            summary['overall_health'] = 'healthy'
+        if utilization_values:
+            summary['average_utilization_percent'] = sum(utilization_values) / len(utilization_values)
         
         return summary
     
-    def _calculate_node_utilization(self, performance_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Calculate node resource utilization."""
-        utilization = {
-            'cpu_utilization_percent': 0,
-            'memory_utilization_percent': 0,
-            'filesystem_utilization_percent': 0,
-            'status': 'unknown'
+    def _calculate_derived_metrics(self, raw_metrics: Dict[str, Any]) -> Dict[str, Any]:
+        """Calculate derived metrics from raw data."""
+        derived = {
+            'cpu_utilization_percentages': {},
+            'memory_utilization_percentages': {},
+            'storage_utilization_percentages': {},
+            'network_throughput_mbps': {},
+            'resource_efficiency_scores': {}
         }
         
-        # Calculate CPU utilization
-        cpu_usage = performance_data.get('cpu_usage', [])
-        cpu_capacity = performance_data.get('cpu_capacity', [])
-        
-        if cpu_usage and cpu_capacity:
-            latest_usage = cpu_usage[0]['average'] if cpu_usage else 0
-            latest_capacity = cpu_capacity[0]['average'] if cpu_capacity else 1
+        # Calculate CPU utilization percentages from raw nanocores
+        node_metrics = raw_metrics.get('node_raw_metrics', {}).get('nodes', {})
+        for node_name, node_data in node_metrics.items():
+            metrics = node_data.get('metrics', {})
             
-            if latest_capacity > 0:
-                utilization['cpu_utilization_percent'] = (latest_usage / latest_capacity) * 100
-        
-        # Calculate memory utilization
-        memory_usage = performance_data.get('memory_usage', [])
-        memory_capacity = performance_data.get('memory_capacity', [])
-        
-        if memory_usage and memory_capacity:
-            latest_usage = memory_usage[0]['average'] if memory_usage else 0
-            latest_capacity = memory_capacity[0]['average'] if memory_capacity else 1
+            cpu_usage = metrics.get('cpuUsageNanoCores', {}).get('latest_value')
+            cpu_capacity = metrics.get('cpuCapacityNanoCores', {}).get('latest_value')
+            memory_usage = metrics.get('memoryWorkingSetBytes', {}).get('latest_value')
+            memory_capacity = metrics.get('memoryCapacityBytes', {}).get('latest_value')
             
-            if latest_capacity > 0:
-                utilization['memory_utilization_percent'] = (latest_usage / latest_capacity) * 100
-        
-        # Calculate filesystem utilization
-        fs_usage = performance_data.get('filesystem_usage', [])
-        fs_available = performance_data.get('filesystem_available', [])
-        
-        if fs_usage and fs_available:
-            latest_usage = fs_usage[0]['average'] if fs_usage else 0
-            latest_available = fs_available[0]['average'] if fs_available else 0
-            total_capacity = latest_usage + latest_available
+            if cpu_usage is not None and cpu_capacity is not None and cpu_capacity > 0:
+                derived['cpu_utilization_percentages'][node_name] = (cpu_usage / cpu_capacity) * 100
             
-            if total_capacity > 0:
-                utilization['filesystem_utilization_percent'] = (latest_usage / total_capacity) * 100
+            if memory_usage is not None and memory_capacity is not None and memory_capacity > 0:
+                derived['memory_utilization_percentages'][node_name] = (memory_usage / memory_capacity) * 100
+            
+            # Calculate efficiency score (balanced CPU/Memory utilization)
+            cpu_util = derived['cpu_utilization_percentages'].get(node_name, 0)
+            mem_util = derived['memory_utilization_percentages'].get(node_name, 0)
+            
+            if cpu_util > 0 and mem_util > 0:
+                # Efficiency peaks around 70% utilization
+                cpu_efficiency = min(cpu_util / 70, 2 - cpu_util / 70) * 100 if cpu_util <= 140 else 0
+                mem_efficiency = min(mem_util / 80, 2 - mem_util / 80) * 100 if mem_util <= 160 else 0
+                derived['resource_efficiency_scores'][node_name] = (cpu_efficiency + mem_efficiency) / 2
         
-        # Determine status
-        cpu_util = utilization['cpu_utilization_percent']
-        memory_util = utilization['memory_utilization_percent']
+        # Calculate storage utilization from storage metrics
+        storage_metrics = raw_metrics.get('storage_raw_metrics', {}).get('storage_devices', {})
+        for device_key, device_data in storage_metrics.items():
+            metrics = device_data.get('metrics', {})
+            used_percent = metrics.get('used_percent', {}).get('latest_value')
+            if used_percent is not None:
+                derived['storage_utilization_percentages'][device_key] = used_percent
         
-        if cpu_util > 90 or memory_util > 95:
-            utilization['status'] = 'critical'
-        elif cpu_util > 75 or memory_util > 85:
-            utilization['status'] = 'warning'
-        elif cpu_util > 0 and memory_util > 0:
-            utilization['status'] = 'healthy'
+        # Calculate network throughput in Mbps
+        network_metrics = raw_metrics.get('network_raw_metrics', {}).get('network_interfaces', {})
+        for interface_key, interface_data in network_metrics.items():
+            metrics = interface_data.get('metrics', {})
+            rx_bytes = metrics.get('rx_bytes', {}).get('latest_value', 0) or 0
+            tx_bytes = metrics.get('tx_bytes', {}).get('latest_value', 0) or 0
+            total_bytes_per_sec = rx_bytes + tx_bytes
+            derived['network_throughput_mbps'][interface_key] = (total_bytes_per_sec * 8) / (1024 * 1024)  # Convert to Mbps
         
-        return utilization
+        return derived
     
-    def _calculate_node_efficiency(self, performance_data: Dict[str, Any]) -> Dict[str, float]:
-        """Calculate node efficiency scores."""
-        efficiency = {
-            'cpu_efficiency': 0.0,
-            'memory_efficiency': 0.0,
-            'overall_efficiency': 0.0
+    def _calculate_network_summary(self, network_interfaces: Dict[str, Any]) -> Dict[str, Any]:
+        """Calculate cluster network summary."""
+        summary = {
+            'total_interfaces': len(network_interfaces),
+            'total_rx_bytes_per_sec': 0.0,
+            'total_tx_bytes_per_sec': 0.0,
+            'total_rx_packets_per_sec': 0.0,
+            'total_tx_packets_per_sec': 0.0,
+            'total_errors': 0.0,
+            'interface_summary': []
         }
         
-        # CPU efficiency (target ~70% utilization)
-        cpu_usage = performance_data.get('cpu_usage', [])
-        if cpu_usage:
-            avg_cpu = sum(point['average'] for point in cpu_usage) / len(cpu_usage)
-            cpu_capacity = performance_data.get('cpu_capacity', [])
-            if cpu_capacity:
-                avg_capacity = sum(point['average'] for point in cpu_capacity) / len(cpu_capacity)
-                if avg_capacity > 0:
-                    cpu_util_percent = (avg_cpu / avg_capacity) * 100
-                    # Efficiency peaks at 70% utilization
-                    if cpu_util_percent <= 70:
-                        efficiency['cpu_efficiency'] = cpu_util_percent / 70 * 100
-                    else:
-                        efficiency['cpu_efficiency'] = max(0, 100 - (cpu_util_percent - 70))
+        for interface_data in network_interfaces.values():
+            metrics = interface_data['metrics']
+            
+            # Get latest values
+            rx_bytes = metrics.get('rx_bytes', {}).get('latest_value', 0) or 0
+            tx_bytes = metrics.get('tx_bytes', {}).get('latest_value', 0) or 0
+            rx_packets = metrics.get('rx_packets', {}).get('latest_value', 0) or 0
+            tx_packets = metrics.get('tx_packets', {}).get('latest_value', 0) or 0
+            rx_errors = metrics.get('rx_errors', {}).get('latest_value', 0) or 0
+            tx_errors = metrics.get('tx_errors', {}).get('latest_value', 0) or 0
+            
+            summary['total_rx_bytes_per_sec'] += rx_bytes
+            summary['total_tx_bytes_per_sec'] += tx_bytes
+            summary['total_rx_packets_per_sec'] += rx_packets
+            summary['total_tx_packets_per_sec'] += tx_packets
+            summary['total_errors'] += (rx_errors + tx_errors)
+            
+            summary['interface_summary'].append({
+                'interface': interface_data['interface'],
+                'computer': interface_data['computer'],
+                'rx_bytes_per_sec': rx_bytes,
+                'tx_bytes_per_sec': tx_bytes,
+                'total_bytes_per_sec': rx_bytes + tx_bytes,
+                'error_rate': rx_errors + tx_errors
+            })
         
-        # Memory efficiency (target ~80% utilization)
-        memory_usage = performance_data.get('memory_usage', [])
-        if memory_usage:
-            avg_memory = sum(point['average'] for point in memory_usage) / len(memory_usage)
-            memory_capacity = performance_data.get('memory_capacity', [])
-            if memory_capacity:
-                avg_capacity = sum(point['average'] for point in memory_capacity) / len(memory_capacity)
-                if avg_capacity > 0:
-                    memory_util_percent = (avg_memory / avg_capacity) * 100
-                    # Efficiency peaks at 80% utilization
-                    if memory_util_percent <= 80:
-                        efficiency['memory_efficiency'] = memory_util_percent / 80 * 100
-                    else:
-                        efficiency['memory_efficiency'] = max(0, 100 - (memory_util_percent - 80))
-        
-        # Overall efficiency
-        efficiency['overall_efficiency'] = (efficiency['cpu_efficiency'] + efficiency['memory_efficiency']) / 2
-        
-        return efficiency
+        return summary
     
-    def _analyze_by_namespace(self, cpu_consumers: List[Dict], memory_consumers: List[Dict]) -> Dict[str, Any]:
-        """Analyze resource consumption by namespace."""
-        namespace_analysis = {}
+    def _generate_utilization_summary(self, raw_metrics: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate a utilization summary from raw metrics for the cluster."""
+        self.logger.info("Generating utilization summary from raw metrics")
         
-        # Analyze CPU consumers by namespace
-        for pod in cpu_consumers:
-            namespace = pod.get('namespace', 'default')
-            if namespace not in namespace_analysis:
-                namespace_analysis[namespace] = {
-                    'cpu_consuming_pods': 0,
-                    'memory_consuming_pods': 0,
-                    'total_cpu_usage': 0,
-                    'total_memory_usage': 0
+        try:
+            utilization_summary = {
+                "cluster_wide_utilization": {
+                    "cpu_average_percent": 0.0,
+                    "memory_average_percent": 0.0,
+                    "storage_average_percent": 0.0,
+                    "network_throughput_mbps": 0.0
+                },
+                "resource_pressure_indicators": {
+                    "cpu_pressure": False,
+                    "memory_pressure": False,
+                    "storage_pressure": False,
+                    "network_pressure": False
+                },
+                "efficiency_assessment": {
+                    "cpu_efficiency_score": 0.0,
+                    "memory_efficiency_score": 0.0,
+                    "overall_efficiency_score": 0.0
                 }
+            }
+
+            # Extract node metrics
+            node_metrics = raw_metrics.get("node_raw_metrics", {}).get("nodes", {})
+            derived_metrics = raw_metrics.get("derived_metrics", {})
+
+            # Calculate cluster-wide averages
+            cpu_utilizations = []
+            memory_utilizations = []
+            storage_utilizations = []
+            network_throughputs = []
+
+            for node_name, node_data in node_metrics.items():
+                cpu_util = derived_metrics.get("cpu_utilization_percentages", {}).get(node_name, 0.0)
+                memory_util = derived_metrics.get("memory_utilization_percentages", {}).get(node_name, 0.0)
+                storage_util = derived_metrics.get("storage_utilization_percentages", {}).get(node_name, 0.0)
+                network_util = derived_metrics.get("network_utilization_mbps", {}).get(node_name, 0.0)
+
+                if cpu_util > 0:
+                    cpu_utilizations.append(cpu_util)
+                if memory_util > 0:
+                    memory_utilizations.append(memory_util)
+                if storage_util > 0:
+                    storage_utilizations.append(storage_util)
+                if network_util > 0:
+                    network_throughputs.append(network_util)
+
+            # Compute averages
+            if cpu_utilizations:
+                utilization_summary["cluster_wide_utilization"]["cpu_average_percent"] = sum(cpu_utilizations) / len(cpu_utilizations)
+            if memory_utilizations:
+                utilization_summary["cluster_wide_utilization"]["memory_average_percent"] = sum(memory_utilizations) / len(memory_utilizations)
+            if storage_utilizations:
+                utilization_summary["cluster_wide_utilization"]["storage_average_percent"] = sum(storage_utilizations) / len(storage_utilizations)
+            if network_throughputs:
+                utilization_summary["cluster_wide_utilization"]["network_throughput_mbps"] = sum(network_throughputs) / len(network_throughputs)
+
+            # Determine resource pressure (e.g., threshold > 80% indicates pressure)
+            utilization_summary["resource_pressure_indicators"]["cpu_pressure"] = (
+                utilization_summary["cluster_wide_utilization"]["cpu_average_percent"] > 80
+            )
+            utilization_summary["resource_pressure_indicators"]["memory_pressure"] = (
+                utilization_summary["cluster_wide_utilization"]["memory_average_percent"] > 80
+            )
+            utilization_summary["resource_pressure_indicators"]["storage_pressure"] = (
+                utilization_summary["cluster_wide_utilization"]["storage_average_percent"] > 80
+            )
+            utilization_summary["resource_pressure_indicators"]["network_pressure"] = (
+                utilization_summary["cluster_wide_utilization"]["network_throughput_mbps"] > 1000  # Example threshold
+            )
+
+            # Calculate efficiency scores (target 70% CPU, 80% memory)
+            cpu_avg = utilization_summary["cluster_wide_utilization"]["cpu_average_percent"]
+            memory_avg = utilization_summary["cluster_wide_utilization"]["memory_average_percent"]
             
-            namespace_analysis[namespace]['cpu_consuming_pods'] += 1
-            namespace_analysis[namespace]['total_cpu_usage'] += pod.get('avg_cpu_millicores', 0)
-        
-        # Analyze memory consumers by namespace
-        for pod in memory_consumers:
-            namespace = pod.get('namespace', 'default')
-            if namespace not in namespace_analysis:
-                namespace_analysis[namespace] = {
-                    'cpu_consuming_pods': 0,
-                    'memory_consuming_pods': 0,
-                    'total_cpu_usage': 0,
-                    'total_memory_usage': 0
-                }
+            cpu_efficiency = min(cpu_avg / 70, 2 - cpu_avg / 70) * 100 if cpu_avg <= 140 else 0
+            memory_efficiency = min(memory_avg / 80, 2 - memory_avg / 80) * 100 if memory_avg <= 160 else 0
             
-            namespace_analysis[namespace]['memory_consuming_pods'] += 1
-            namespace_analysis[namespace]['total_memory_usage'] += pod.get('avg_memory_mb', 0)
-        
-        return namespace_analysis
+            utilization_summary["efficiency_assessment"]["cpu_efficiency_score"] = cpu_efficiency
+            utilization_summary["efficiency_assessment"]["memory_efficiency_score"] = memory_efficiency
+            utilization_summary["efficiency_assessment"]["overall_efficiency_score"] = (
+                cpu_efficiency + memory_efficiency
+            ) / 2
+
+            self.logger.info("Utilization summary generated successfully")
+            return utilization_summary
+
+        except Exception as e:
+            self.logger.error(f"Failed to generate utilization summary: {e}")
+            return {
+                "error": str(e),
+                "metrics_availability": False,
+                "cluster_wide_utilization": {},
+                "resource_pressure_indicators": {},
+                "efficiency_assessment": {}
+            }
+    

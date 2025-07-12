@@ -28,6 +28,7 @@ class AzureClientFactory:
             raise ConfigurationException("Azure subscription_id is required")
         
         self._credential = None
+        self._clients = {}
         self.logger = logger.bind(factory="azure")
     
     def _get_credential(self):
@@ -81,8 +82,6 @@ class AzureClientFactory:
             config=self.config
         )
     
-    
-    
     async def create_all_clients(self) -> Dict[str, Any]:
         """Create all Azure clients."""
         clients = {
@@ -100,4 +99,18 @@ class AzureClientFactory:
                 self.logger.error(f"Failed to connect {name} client", error=str(e))
                 raise ClientConnectionException(name, str(e))
         
+        # Store clients for cleanup
+        self._clients = clients
         return clients
+    
+    async def disconnect_all(self) -> None:
+        """Disconnect all clients (for cleanup)."""
+        for name, client in self._clients.items():
+            try:
+                await client.disconnect()
+                self.logger.info(f"Disconnected {name} client successfully")
+            except Exception as e:
+                self.logger.warning(f"Error disconnecting {name} client: {e}")
+        
+        self._clients = {}
+        self.logger.info("Azure client factory cleanup completed")
