@@ -1,4 +1,5 @@
-"""Azure client factory for creating and managing Azure service clients."""
+# src/finops/clients/azure/client_factory.py
+"""Fixed Azure client factory for creating and managing Azure service clients."""
 
 from typing import Dict, Any, Optional
 import structlog
@@ -9,7 +10,6 @@ from finops.core.exceptions import ClientConnectionException, ConfigurationExcep
 from .aks_client import AKSClient
 from .cost_client import CostClient
 from .monitor_client import MonitorClient
-
 
 logger = structlog.get_logger(__name__)
 
@@ -84,24 +84,34 @@ class AzureClientFactory:
     
     async def create_all_clients(self) -> Dict[str, Any]:
         """Create all Azure clients."""
-        clients = {
-            "aks": self.create_aks_client(),
-            "cost": self.create_cost_client(),
-            "monitor": self.create_monitor_client()
-        }
-        
-        # Connect all clients
-        for name, client in clients.items():
-            try:
-                await client.connect()
-                self.logger.info(f"Connected {name} client successfully")
-            except Exception as e:
-                self.logger.error(f"Failed to connect {name} client", error=str(e))
-                raise ClientConnectionException(name, str(e))
-        
-        # Store clients for cleanup
-        self._clients = clients
-        return clients
+        try:
+            # Create all clients
+            aks_client = self.create_aks_client()
+            cost_client = self.create_cost_client()
+            monitor_client = self.create_monitor_client()
+            
+            clients = {
+                "aks": aks_client,
+                "cost": cost_client,
+                "monitor": monitor_client
+            }
+            
+            # Connect all clients
+            for name, client in clients.items():
+                try:
+                    await client.connect()
+                    self.logger.info(f"Connected {name} client successfully")
+                except Exception as e:
+                    self.logger.error(f"Failed to connect {name} client", error=str(e))
+                    raise ClientConnectionException(name, str(e))
+            
+            # Store clients for cleanup
+            self._clients = clients
+            return clients
+            
+        except Exception as e:
+            self.logger.error("Failed to create all clients", error=str(e))
+            raise ClientConnectionException("AzureFactory", f"Failed to create clients: {e}")
     
     async def disconnect_all(self) -> None:
         """Disconnect all clients (for cleanup)."""

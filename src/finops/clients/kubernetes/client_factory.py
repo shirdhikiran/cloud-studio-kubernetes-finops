@@ -1,11 +1,10 @@
-"""Kubernetes client factory."""
+# src/finops/clients/kubernetes/client_factory.py
+"""Fixed Kubernetes client factory."""
 
 from typing import Dict, Any, Optional
 import structlog
-from kubernetes import client, config
-from kubernetes.client.rest import ApiException
 
-from finops.core.exceptions import ClientConnectionException, ConfigurationException
+from finops.core.exceptions import ConfigurationException
 from .k8s_client import KubernetesClient
 
 logger = structlog.get_logger(__name__)
@@ -14,18 +13,18 @@ logger = structlog.get_logger(__name__)
 class KubernetesClientFactory:
     """Factory for creating Kubernetes clients."""
     
-    def __init__(self, config_dict: Dict[str, Any]):
-        self.config = config_dict
-        self.kubeconfig_path = config_dict.get("kubeconfig_path")
-        self.context = config_dict.get("context")
-        self.namespace = config_dict.get("namespace", "default")
+    def __init__(self, config: Dict[str, Any]):
+        self.config = config
+        self.kubeconfig_path = config.get("kubeconfig_path")
+        self.context = config.get("context")
+        self.namespace = config.get("namespace", "default")
         
         self.logger = logger.bind(factory="kubernetes")
     
     def create_client(self, kubeconfig_data: Optional[bytes] = None) -> KubernetesClient:
-        """Create Kubernetes client."""
+        """Create Kubernetes client with correct parameters."""
         return KubernetesClient(
-            config=self.config,
+            config_dict=self.config,  # Use config_dict parameter name
             kubeconfig_path=self.kubeconfig_path,
             context=self.context,
             kubeconfig_data=kubeconfig_data

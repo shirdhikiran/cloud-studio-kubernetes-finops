@@ -1,4 +1,5 @@
-"""Azure Kubernetes Service client."""
+# src/finops/clients/azure/aks_client.py
+"""Azure Kubernetes Service client with complete functionality."""
 
 from typing import Dict, Any, List, Optional
 import structlog
@@ -13,7 +14,7 @@ logger = structlog.get_logger(__name__)
 
 
 class AKSClient(BaseClient):
-    """Client for Azure Kubernetes Service operations."""
+    """Complete Azure Kubernetes Service client."""
     
     def __init__(self, credential, subscription_id: str, config: Dict[str, Any]):
         super().__init__(config, "AKSClient")
@@ -46,8 +47,6 @@ class AKSClient(BaseClient):
         try:
             if not self._connected or not self._client:
                 return False
-            
-            # Try to list clusters as a health check
             list(self._client.managed_clusters.list())
             return True
         except Exception as e:
@@ -56,7 +55,7 @@ class AKSClient(BaseClient):
     
     @retry_with_backoff(max_retries=3)
     async def discover_clusters(self, resource_group: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Discover AKS clusters."""
+        """Discover AKS clusters in resource group."""
         if not self._connected:
             raise DiscoveryException("AKS", "Client not connected")
         
@@ -72,7 +71,7 @@ class AKSClient(BaseClient):
                 self.logger.info("Discovering clusters in all resource groups")
             
             for cluster in cluster_list:
-                cluster_data = await self._extract_cluster_data(cluster)
+                cluster_data = self._extract_cluster_data(cluster)
                 clusters.append(cluster_data)
             
             self.logger.info(f"Discovered {len(clusters)} AKS clusters")
@@ -92,7 +91,7 @@ class AKSClient(BaseClient):
             node_pools = []
             
             for pool in pools:
-                pool_data = await self._extract_node_pool_data(pool, cluster_name)
+                pool_data = self._extract_node_pool_data(pool, cluster_name)
                 node_pools.append(pool_data)
             
             self.logger.info(f"Discovered {len(node_pools)} node pools for cluster {cluster_name}")
@@ -116,8 +115,8 @@ class AKSClient(BaseClient):
         except AzureError as e:
             raise DiscoveryException("AKS", f"Failed to get cluster credentials: {e}")
     
-    async def _extract_cluster_data(self, cluster) -> Dict[str, Any]:
-        """Extract cluster data from Azure response."""
+    def _extract_cluster_data(self, cluster) -> Dict[str, Any]:
+        """Extract comprehensive cluster data."""
         return {
             'id': cluster.id,
             'name': cluster.name,
@@ -142,12 +141,12 @@ class AKSClient(BaseClient):
                 'tier': cluster.sku.tier if cluster.sku else None
             },
             'tags': cluster.tags or {},
-            'created_time': cluster.system_data.created_at if cluster.system_data else None,
-            'last_modified': cluster.system_data.last_modified_at if cluster.system_data else None,
+            'created_time': cluster.system_data.created_at.isoformat() if cluster.system_data and cluster.system_data.created_at else None,
+            'last_modified': cluster.system_data.last_modified_at.isoformat() if cluster.system_data and cluster.system_data.last_modified_at else None,
         }
     
-    async def _extract_node_pool_data(self, pool, cluster_name: str) -> Dict[str, Any]:
-        """Extract node pool data from Azure response."""
+    def _extract_node_pool_data(self, pool, cluster_name: str) -> Dict[str, Any]:
+        """Extract comprehensive node pool data."""
         return {
             'name': pool.name,
             'cluster_name': cluster_name,
@@ -176,7 +175,7 @@ class AKSClient(BaseClient):
         }
     
     def _process_addon_profiles(self, addon_profiles: Optional[Dict]) -> Dict[str, Any]:
-        """Process addon profiles to extract relevant information."""
+        """Process addon profiles."""
         processed_addons = {}
         if addon_profiles:
             for addon_name, addon_config in addon_profiles.items():
