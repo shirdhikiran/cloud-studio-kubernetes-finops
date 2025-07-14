@@ -102,7 +102,8 @@ class KubernetesClient(BaseClient):
                 'config_maps': await self.discover_config_maps(),
                 'secrets': await self.discover_secrets(),
                 'resource_quotas': await self.discover_resource_quotas(),
-                'limit_ranges': await self.discover_limit_ranges()
+                'limit_ranges': await self.discover_limit_ranges(),
+                'events': await self.discover_events()
             }
             
             # Calculate summary
@@ -115,6 +116,7 @@ class KubernetesClient(BaseClient):
                 'total_pvs': len(resources['persistent_volumes']),
                 'total_pvcs': len(resources['persistent_volume_claims']),
                 'total_ingresses': len(resources['ingresses']),
+                'total_events': len(resources['events']),
                 'cluster_name': self.cluster_name
             }
             
@@ -199,16 +201,19 @@ class KubernetesClient(BaseClient):
     
     @retry_with_backoff(max_retries=3)
     async def discover_pods(self) -> List[Dict[str, Any]]:
-        """Discover pods."""
+        """Discover pods - FIXED status detection only."""
         try:
             pods = []
             pod_list = self.v1.list_pod_for_all_namespaces()
             
             for pod in pod_list.items:
+                # FIX: Use the correct pod status field
+                pod_status = pod.status.phase if pod.status and pod.status.phase else "Unknown"
+                
                 pod_data = {
                     'name': pod.metadata.name,
                     'namespace': pod.metadata.namespace,
-                    'status': pod.status.phase,
+                    'status': pod_status,  # FIXED: This now correctly shows Running/Pending/Failed/Succeeded
                     'node': pod.spec.node_name,
                     'ip': pod.status.pod_ip,
                     'host_ip': pod.status.host_ip,
@@ -244,6 +249,7 @@ class KubernetesClient(BaseClient):
             
         except ApiException as e:
             raise DiscoveryException("Kubernetes", f"Failed to discover pods: {e}")
+
     
     @retry_with_backoff(max_retries=3)
     async def discover_deployments(self) -> List[Dict[str, Any]]:
@@ -545,6 +551,45 @@ class KubernetesClient(BaseClient):
         except ApiException as e:
             raise DiscoveryException("Kubernetes", f"Failed to discover limit ranges: {e}")
     
+    @retry_with_backoff(max_retries=3)
+    async def discover_events(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """Discover recent cluster events - NEW method, doesn't affect existing ones."""
+        try:
+            events = []
+            event_list = self.v1.list_event_for_all_namespaces(limit=limit)
+            
+            for event in event_list.items:
+                event_data = {
+                    'name': event.metadata.name,
+                    'namespace': event.metadata.namespace,
+                    'type': event.type,
+                    'reason': event.reason,
+                    'message': event.message,
+                    'source': {
+                        'component': event.source.component if event.source else None,
+                        'host': event.source.host if event.source else None
+                    },
+                    'involved_object': {
+                        'kind': event.involved_object.kind if event.involved_object else None,
+                        'name': event.involved_object.name if event.involved_object else None,
+                        'namespace': event.involved_object.namespace if event.involved_object else None
+                    },
+                    'first_timestamp': event.first_timestamp.isoformat() if event.first_timestamp else None,
+                    'last_timestamp': event.last_timestamp.isoformat() if event.last_timestamp else None,
+                    'count': event.count or 1
+                }
+                events.append(event_data)
+            
+            # Sort by last timestamp (most recent first)
+            events.sort(key=lambda x: x['last_timestamp'] or '', reverse=True)
+            
+            self.logger.info(f"Discovered {len(events)} cluster events")
+            return events
+            
+        except ApiException as e:
+            self.logger.warning(f"Failed to discover events: {e}")
+            return []
+        
     # Helper methods
     def _get_pv_source(self, pv) -> Dict[str, Any]:
         """Determine PV source type and details."""

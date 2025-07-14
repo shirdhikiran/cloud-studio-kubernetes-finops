@@ -1,5 +1,4 @@
-# src/finops/discovery/discovery_client.py
-"""Complete discovery client with comprehensive metrics and cost handling."""
+"""Enhanced discovery client with comprehensive 3-source metrics - no duplicates."""
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta, timezone
@@ -17,7 +16,7 @@ logger = structlog.get_logger(__name__)
 
 
 class DiscoveryClient(BaseClient):
-    """Complete discovery client with comprehensive metrics and cost handling."""
+    """Enhanced discovery client with 3-source comprehensive metrics - no duplicates."""
     
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config, "DiscoveryClient")
@@ -79,11 +78,11 @@ class DiscoveryClient(BaseClient):
         return True
     
     async def discover_comprehensive_data(self) -> Dict[str, Any]:
-        """Discover comprehensive data for resource group."""
+        """Discover comprehensive data with enhanced 3-source metrics integration."""
         if not self._connected:
             raise DiscoveryException("DiscoveryClient", "Client not connected")
             
-        self.logger.info(f"Starting comprehensive discovery for resource group: {self.resource_group}")
+        self.logger.info(f"Starting comprehensive discovery with enhanced metrics for: {self.resource_group}")
         
         discovery_data = {
             "discovery_metadata": {
@@ -91,7 +90,8 @@ class DiscoveryClient(BaseClient):
                 "resource_group": self.resource_group,
                 "subscription_id": self.subscription_id,
                 "cost_analysis_days": self.cost_analysis_days,
-                "metrics_hours": self.metrics_hours
+                "metrics_hours": self.metrics_hours,
+                "metrics_enhancement": "3-source_integration"
             },
             "resource_group_costs": {},
             "clusters": [],
@@ -100,45 +100,839 @@ class DiscoveryClient(BaseClient):
                 "total_nodes": 0,
                 "total_pods": 0,
                 "total_cost": 0.0,
-                "currency": "USD"
+                "currency": "USD",
+                "metrics_sources_available": 0,
+                "comprehensive_metrics_enabled": True
             }
         }
         
         try:
-            # Get resource group costs with robust error handling
+            # Get resource group costs (unchanged - no duplicates here)
             discovery_data["resource_group_costs"] = await self._get_resource_group_costs_safe()
             
             # Discover clusters
             clusters = await self.aks_client.discover_clusters(self.resource_group)
             discovery_data["summary"]["total_clusters"] = len(clusters)
             
-            # Process each cluster
+            # Process each cluster with enhanced metrics
             for cluster in clusters:
-                cluster_data = await self._discover_cluster_comprehensive(cluster)
+                cluster_data = await self._discover_cluster_with_enhanced_metrics(cluster)
                 discovery_data["clusters"].append(cluster_data)
                 
-                # Update summary
+                # Update summary (no changes needed here)
                 discovery_data["summary"]["total_nodes"] += cluster_data.get("node_count", 0)
                 discovery_data["summary"]["total_pods"] += cluster_data.get("pod_count", 0)
             
-            # Calculate total cost from resource group costs
+            # Calculate total cost from resource group costs (unchanged)
             rg_costs = discovery_data["resource_group_costs"]
             discovery_data["summary"]["total_cost"] = rg_costs.get("cost_summary", {}).get("total_cost", 0.0)
             
+            # Count available metrics sources
+            if discovery_data["clusters"]:
+                sample_cluster = discovery_data["clusters"][0]
+                enhanced_metrics = sample_cluster.get("enhanced_metrics", {})
+                successful_sources = enhanced_metrics.get("collection_metadata", {}).get("successful_sources", 0)
+                discovery_data["summary"]["metrics_sources_available"] = successful_sources
+            
             self.logger.info(
-                f"Comprehensive discovery completed",
+                f"Enhanced comprehensive discovery completed",
                 clusters=len(clusters),
-                total_cost=discovery_data["summary"]["total_cost"]
+                total_cost=discovery_data["summary"]["total_cost"],
+                metrics_sources=discovery_data["summary"]["metrics_sources_available"]
             )
             
             return discovery_data
             
         except Exception as e:
-            self.logger.error(f"Comprehensive discovery failed: {e}")
+            self.logger.error(f"Enhanced comprehensive discovery failed: {e}")
             raise DiscoveryException("DiscoveryClient", f"Discovery failed: {e}")
     
+    async def _discover_cluster_with_enhanced_metrics(self, cluster: Dict[str, Any]) -> Dict[str, Any]:
+        """Discover cluster data with enhanced 3-source metrics integration."""
+        cluster_name = cluster["name"]
+        resource_group = cluster["resource_group"]
+        cluster_id = cluster["id"]
+        
+        self.logger.info(f"Processing cluster with enhanced metrics: {cluster_name}")
+        
+        cluster_data = {
+            "cluster_info": cluster,
+            "node_pools": [],
+            "kubernetes_resources": {},
+            "enhanced_metrics": {},  # NEW: Enhanced 3-source metrics
+            "utilization_summary": {},  # ENHANCED: Based on new metrics structure
+            "node_count": 0,
+            "pod_count": 0,
+            "discovery_status": "in_progress"
+        }
+        
+        try:
+            # Discover node pools (unchanged)
+            node_pools = await self.aks_client.discover_node_pools(cluster_name, resource_group)
+            cluster_data["node_pools"] = node_pools if node_pools is not None else []
+            cluster_data["node_count"] = sum(pool.get("count", 0) for pool in cluster_data["node_pools"] if isinstance(pool, dict))
+            
+            # NEW: Get enhanced metrics using the new MonitorClient method
+            self.logger.info(f"Collecting enhanced 3-source metrics for: {cluster_name}")
+            
+            try:
+                enhanced_metrics = await self.monitor_client.get_enhanced_cluster_metrics(
+                    cluster_id, cluster_name, self.metrics_hours
+                )
+                
+                if enhanced_metrics:
+                    cluster_data["enhanced_metrics"] = enhanced_metrics
+                    self.logger.info(f"Enhanced metrics collected successfully for {cluster_name}")
+                    
+                    # Log metrics source summary
+                    metadata = enhanced_metrics.get("collection_metadata", {})
+                    self.logger.info(
+                        f"Metrics sources for {cluster_name}",
+                        total_data_points=metadata.get("total_data_points", 0),
+                        successful_sources=metadata.get("successful_sources", 0),
+                        health_score=metadata.get("health_score", 0.0)
+                    )
+                else:
+                    self.logger.warning(f"No enhanced metrics collected for {cluster_name}")
+                    cluster_data["enhanced_metrics"] = self._create_empty_enhanced_metrics_structure(cluster_name)
+                    
+            except Exception as e:
+                self.logger.error(f"Enhanced metrics collection failed for {cluster_name}: {e}")
+                cluster_data["enhanced_metrics"] = self._create_empty_enhanced_metrics_structure(cluster_name)
+            
+            # ENHANCED: Build utilization summary from new metrics structure
+            cluster_data["utilization_summary"] = self._build_enhanced_utilization_summary(
+                cluster_data["enhanced_metrics"], 
+                cluster_data["node_pools"]
+            )
+            
+            # Discover Kubernetes resources with enhanced integration
+            if self.k8s_client:
+                try:
+                    kubeconfig_data = await self.aks_client.get_cluster_credentials(cluster_name, resource_group)
+                    
+                    if kubeconfig_data:
+                        k8s_cluster_client = KubernetesClient(
+                            config_dict={"cluster_name": cluster_name},
+                            kubeconfig_data=kubeconfig_data
+                        )
+                        await k8s_cluster_client.connect()
+                        
+                        k8s_resources = await k8s_cluster_client.discover_all_resources()
+                        cluster_data["kubernetes_resources"] = k8s_resources if k8s_resources is not None else {}
+                        cluster_data["pod_count"] = len(k8s_resources.get("pods", [])) if isinstance(k8s_resources, dict) else 0
+                        
+                        # ENHANCED: Integrate Kubernetes API data with enhanced metrics
+                        self._integrate_kubernetes_data_with_enhanced_metrics(
+                            cluster_data["enhanced_metrics"], 
+                            k8s_resources
+                        )
+                        
+                        await k8s_cluster_client.disconnect()
+                    else:
+                        cluster_data["kubernetes_resources"] = {"error": "Failed to get cluster credentials"}
+                        
+                except Exception as e:
+                    self.logger.warning(f"Kubernetes resource discovery failed for {cluster_name}: {e}")
+                    cluster_data["kubernetes_resources"] = {"error": str(e)}
+            
+            cluster_data["discovery_status"] = "completed"
+            
+        except Exception as e:
+            self.logger.error(f"Error processing cluster {cluster_name}: {e}")
+            cluster_data["discovery_status"] = "failed"
+            cluster_data["error"] = str(e)
+        
+        return cluster_data
+    
+    def _integrate_kubernetes_data_with_enhanced_metrics(self, enhanced_metrics: Dict[str, Any], 
+                                                       k8s_resources: Dict[str, Any]) -> None:
+        """Integrate Kubernetes API data with enhanced metrics (Source 3: Kubernetes API)."""
+        if not k8s_resources or not isinstance(enhanced_metrics, dict):
+            return
+        
+        # Update the kubernetes_api data source status
+        k8s_source = enhanced_metrics.get('data_sources', {}).get('kubernetes_api', {})
+        k8s_source['status'] = 'success'
+        k8s_source['resources_discovered'] = list(k8s_resources.keys())
+        
+        # Add Kubernetes API data to combined_analysis for cross-validation
+        combined_analysis = enhanced_metrics.get('combined_analysis', {})
+        
+        # Cross-validate pod counts between Container Insights and Kubernetes API
+        workload_distribution = enhanced_metrics.get('workload_distribution', {})
+        k8s_pods = k8s_resources.get('pods', [])
+        
+        if workload_distribution and k8s_pods:
+            # Container Insights pod count
+            ci_total_pods = 0
+            if isinstance(workload_distribution, list):
+                ci_total_pods = sum(ns.get('TotalPods', 0) for ns in workload_distribution)
+            elif isinstance(workload_distribution, dict):
+                ci_total_pods = workload_distribution.get('TotalPods', 0)
+            
+            # Kubernetes API pod count
+            k8s_total_pods = len(k8s_pods)
+            
+            # Add cross-validation data
+            if 'data_validation' not in combined_analysis:
+                combined_analysis['data_validation'] = {}
+            
+            combined_analysis['data_validation']['pod_count_validation'] = {
+                'container_insights_pods': ci_total_pods,
+                'kubernetes_api_pods': k8s_total_pods,
+                'variance_percentage': abs(ci_total_pods - k8s_total_pods) / max(ci_total_pods, k8s_total_pods, 1) * 100,
+                'data_consistency': 'good' if abs(ci_total_pods - k8s_total_pods) <= 2 else 'warning'
+            }
+        
+        # Add current cluster state from Kubernetes API
+        cluster_state = {
+            'current_namespace_count': len(k8s_resources.get('namespaces', [])),
+            'current_deployment_count': len(k8s_resources.get('deployments', [])),
+            'current_service_count': len(k8s_resources.get('services', [])),
+            'current_pv_count': len(k8s_resources.get('persistent_volumes', [])),
+            'current_ingress_count': len(k8s_resources.get('ingresses', []))
+        }
+        
+        combined_analysis['current_cluster_state'] = cluster_state
+        
+        # Update metadata
+        metadata = enhanced_metrics.get('collection_metadata', {})
+        metadata['successful_sources'] = metadata.get('successful_sources', 0) + 1
+        
+        self.logger.debug("Integrated Kubernetes API data with enhanced metrics")
+    
+    def _build_enhanced_utilization_summary(self, enhanced_metrics: Dict[str, Any], 
+                                          node_pools: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Build utilization summary from enhanced 3-source metrics structure (NO DUPLICATES)."""
+        if not isinstance(enhanced_metrics, dict):
+            enhanced_metrics = {}
+        if not isinstance(node_pools, list):
+            node_pools = []
+        
+        # Initialize utilization summary with clear source attribution
+        utilization_summary = {
+            # ===== CLUSTER OVERVIEW (from Container Insights) =====
+            "cluster_overview": {
+                "source": "container_insights",
+                "node_count": 0,
+                "ready_nodes": 0,
+                "total_vcores": 0,
+                "total_memory_gb": 0,
+                "node_pools_count": len(node_pools),
+                "health_percentage": 0.0
+            },
+            
+            # ===== RESOURCE UTILIZATION (from Azure Monitor) =====
+            "resource_utilization": {
+                "source": "azure_monitor",
+                "cpu": {
+                    "latest_percentage": 0.0,
+                    "average_percentage": 0.0,
+                    "peak_percentage": 0.0,
+                    "status": "unknown"
+                },
+                "memory": {
+                    "latest_percentage": 0.0,
+                    "average_percentage": 0.0,
+                    "peak_percentage": 0.0,
+                    "status": "unknown"
+                },
+                "disk": {
+                    "latest_percentage": 0.0,
+                    "average_percentage": 0.0,
+                    "peak_percentage": 0.0,
+                    "status": "unknown"
+                },
+                "network": {
+                    "inbound_bytes_per_sec": 0.0,
+                    "outbound_bytes_per_sec": 0.0,
+                    "total_throughput": 0.0
+                }
+            },
+            
+            # ===== CONTROL PLANE HEALTH (from Azure Monitor) =====
+            "control_plane_health": {
+                "source": "azure_monitor",
+                "apiserver": {
+                    "cpu_usage": 0.0,
+                    "memory_usage": 0.0,
+                    "status": "unknown"
+                },
+                "etcd": {
+                    "cpu_usage": 0.0,
+                    "memory_usage": 0.0,
+                    "status": "unknown"
+                },
+                "overall_status": "unknown"
+            },
+            
+            # ===== WORKLOAD DISTRIBUTION (from Container Insights) =====
+            "workload_distribution": {
+                "source": "container_insights",
+                "total_pods": 0,
+                "running_pods": 0,
+                "pending_pods": 0,
+                "failed_pods": 0,
+                "succeeded_pods": 0,
+                "running_percentage": 0.0,
+                "namespace_breakdown": []
+            },
+            
+            # ===== COMBINED ANALYSIS (from all sources) =====
+            "combined_analysis": {
+                "source": "cross_validation",
+                "health_score": 0.0,
+                "data_consistency_score": 0.0,
+                "recommendations": [],
+                "data_source_status": {}
+            },
+            
+            # ===== NODE POOL BREAKDOWN (calculated) =====
+            "node_pool_breakdown": [],
+            
+            # ===== METRICS COLLECTION STATUS =====
+            "metrics_collection_status": {
+                "total_data_points": 0,
+                "successful_sources": 0,
+                "available_metrics": []
+            }
+        }
+        
+        # ===== POPULATE FROM ENHANCED METRICS =====
+        
+        # 1. Cluster Overview (from Container Insights) - FIXED STRUCTURE
+        cluster_overview = enhanced_metrics.get('cluster_overview', {})
+
+        self.logger.info(f"Processing cluster overview: type={type(cluster_overview)}, value={cluster_overview}")
+
+        if cluster_overview and isinstance(cluster_overview, dict):
+            # Check if it's an empty dict
+            if not cluster_overview or cluster_overview.get('TotalNodes', 0) == 0:
+                self.logger.warning("Cluster overview is empty or has no nodes")
+                utilization_summary["cluster_overview"].update({
+                    "node_count": 0,
+                    "ready_nodes": 0,
+                    "not_ready_nodes": 0,
+                    "health_percentage": 0.0,
+                    "status": "no_data_available"
+                })
+            else:
+                # Handle valid cluster overview structure
+                total_nodes = self._safe_int_conversion(cluster_overview.get('TotalNodes', 0))
+                ready_nodes = self._safe_int_conversion(cluster_overview.get('ReadyNodes', 0))
+                not_ready_nodes = self._safe_int_conversion(cluster_overview.get('NotReadyNodes', 0))
+                health_percentage = self._safe_float_conversion(cluster_overview.get('HealthPercentage', 0.0))
+                
+                utilization_summary["cluster_overview"].update({
+                    "node_count": total_nodes,
+                    "ready_nodes": ready_nodes,
+                    "not_ready_nodes": not_ready_nodes,
+                    "health_percentage": health_percentage,
+                    "status": "success"
+                })
+                self.logger.info(f"Cluster overview processed successfully: {total_nodes} nodes, {health_percentage:.1f}% healthy")
+        else:
+            self.logger.warning(f"Cluster overview data invalid: type={type(cluster_overview)}, value={cluster_overview}")
+            utilization_summary["cluster_overview"].update({
+                "node_count": 0,
+                "ready_nodes": 0,
+                "not_ready_nodes": 0,
+                "health_percentage": 0.0,
+                "status": "collection_failed"
+            })
+        
+        # 2. Resource Utilization (from Azure Monitor node performance) - ALL METRICS
+        node_performance = enhanced_metrics.get('node_performance', {})
+        if node_performance:
+            self.logger.info(f"Processing node performance metrics: {list(node_performance.keys())}")
+            
+            # CPU utilization (multiple CPU metrics)
+            cpu_percentage = node_performance.get('node_cpu_usage_percentage', {})
+            cpu_millicores = node_performance.get('node_cpu_usage_millicores', {})
+            
+            if cpu_percentage or cpu_millicores:
+                # Prefer percentage, fallback to millicores
+                primary_cpu = cpu_percentage if cpu_percentage else cpu_millicores
+                cpu_latest = self._safe_float_conversion(primary_cpu.get('latest_value', 0.0))
+                cpu_avg = self._safe_float_conversion(primary_cpu.get('average_value', 0.0))
+                cpu_max = self._safe_float_conversion(primary_cpu.get('max_value', 0.0))
+                
+                utilization_summary["resource_utilization"]["cpu"].update({
+                    "latest_percentage": cpu_latest,
+                    "average_percentage": cpu_avg,
+                    "peak_percentage": cpu_max,
+                    "status": self._get_resource_status(cpu_avg, [60, 80]),
+                    "millicores_available": self._safe_float_conversion(cpu_millicores.get('latest_value', 0.0)) if cpu_millicores else None,
+                    "data_points": primary_cpu.get('data_points', 0)
+                })
+                self.logger.info(f"CPU metrics processed: avg={cpu_avg}%, latest={cpu_latest}%")
+            
+            # Memory utilization (multiple memory metrics)
+            memory_working_set_pct = node_performance.get('node_memory_working_set_percentage', {})
+            memory_working_set_bytes = node_performance.get('node_memory_working_set_bytes', {})
+            memory_rss_pct = node_performance.get('node_memory_rss_percentage', {})
+            memory_rss_bytes = node_performance.get('node_memory_rss_bytes', {})
+            
+            # Prefer working set metrics, fallback to RSS
+            primary_memory_pct = memory_working_set_pct if memory_working_set_pct else memory_rss_pct
+            primary_memory_bytes = memory_working_set_bytes if memory_working_set_bytes else memory_rss_bytes
+            
+            if primary_memory_pct:
+                memory_latest = self._safe_float_conversion(primary_memory_pct.get('latest_value', 0.0))
+                memory_avg = self._safe_float_conversion(primary_memory_pct.get('average_value', 0.0))
+                memory_max = self._safe_float_conversion(primary_memory_pct.get('max_value', 0.0))
+                
+                utilization_summary["resource_utilization"]["memory"].update({
+                    "latest_percentage": memory_latest,
+                    "average_percentage": memory_avg,
+                    "peak_percentage": memory_max,
+                    "status": self._get_resource_status(memory_avg, [70, 85]),
+                    "working_set_bytes": self._safe_float_conversion(primary_memory_bytes.get('latest_value', 0.0)) if primary_memory_bytes else None,
+                    "rss_bytes": self._safe_float_conversion(memory_rss_bytes.get('latest_value', 0.0)) if memory_rss_bytes else None,
+                    "data_points": primary_memory_pct.get('data_points', 0)
+                })
+                self.logger.info(f"Memory metrics processed: avg={memory_avg}%, latest={memory_latest}%")
+            
+            # Disk utilization
+            disk_percentage = node_performance.get('node_disk_usage_percentage', {})
+            disk_bytes = node_performance.get('node_disk_usage_bytes', {})
+            
+            if disk_percentage:
+                disk_latest = self._safe_float_conversion(disk_percentage.get('latest_value', 0.0))
+                disk_avg = self._safe_float_conversion(disk_percentage.get('average_value', 0.0))
+                disk_max = self._safe_float_conversion(disk_percentage.get('max_value', 0.0))
+                
+                utilization_summary["resource_utilization"]["disk"].update({
+                    "latest_percentage": disk_latest,
+                    "average_percentage": disk_avg,
+                    "peak_percentage": disk_max,
+                    "status": self._get_resource_status(disk_avg, [75, 90]),
+                    "usage_bytes": self._safe_float_conversion(disk_bytes.get('latest_value', 0.0)) if disk_bytes else None,
+                    "data_points": disk_percentage.get('data_points', 0)
+                })
+            
+            # Network utilization
+            network_in = node_performance.get('node_network_in_bytes', {})
+            network_out = node_performance.get('node_network_out_bytes', {})
+            
+            if network_in or network_out:
+                network_in_value = self._safe_float_conversion(network_in.get('latest_value', 0.0)) if network_in else 0.0
+                network_out_value = self._safe_float_conversion(network_out.get('latest_value', 0.0)) if network_out else 0.0
+                
+                utilization_summary["resource_utilization"]["network"].update({
+                    "inbound_bytes_per_sec": network_in_value / 300 if network_in_value else 0.0,  # 5-min average
+                    "outbound_bytes_per_sec": network_out_value / 300 if network_out_value else 0.0,
+                    "total_throughput": (network_in_value + network_out_value) / 300 if (network_in_value or network_out_value) else 0.0,
+                    "inbound_bytes_total": network_in_value,
+                    "outbound_bytes_total": network_out_value
+                })
+            
+            # Node Resource Allocation (from resource_allocation sub-section)
+            resource_allocation = node_performance.get('resource_allocation', {})
+            if resource_allocation:
+                allocatable_cpu = resource_allocation.get('kube_node_status_allocatable_cpu_cores', {})
+                allocatable_memory = resource_allocation.get('kube_node_status_allocatable_memory_bytes', {})
+                node_condition = resource_allocation.get('kube_node_status_condition', {})
+                
+                utilization_summary["resource_utilization"]["node_allocation"] = {
+                    "allocatable_cpu_cores": self._safe_float_conversion(allocatable_cpu.get('latest_value', 0.0)) if allocatable_cpu else 0.0,
+                    "allocatable_memory_bytes": self._safe_float_conversion(allocatable_memory.get('latest_value', 0.0)) if allocatable_memory else 0.0,
+                    "node_condition_status": self._safe_float_conversion(node_condition.get('latest_value', 0.0)) if node_condition else 0.0
+                }
+        else:
+            self.logger.warning("No node performance metrics available")
+        
+        # 3. Control Plane Health (from Azure Monitor) - ALL CONTROL PLANE METRICS
+        control_plane = enhanced_metrics.get('control_plane_health', {})
+        if control_plane:
+            self.logger.info(f"Processing control plane metrics: {list(control_plane.keys())}")
+            
+            # API Server metrics
+            apiserver_cpu = control_plane.get('apiserver_cpu_usage_percentage', {})
+            apiserver_memory = control_plane.get('apiserver_memory_usage_percentage', {})
+            apiserver_requests = control_plane.get('apiserver_current_inflight_requests', {})
+            
+            if apiserver_cpu or apiserver_memory or apiserver_requests:
+                utilization_summary["control_plane_health"]["apiserver"].update({
+                    "cpu_usage": self._safe_float_conversion(apiserver_cpu.get('latest_value', 0.0)) if apiserver_cpu else 0.0,
+                    "memory_usage": self._safe_float_conversion(apiserver_memory.get('latest_value', 0.0)) if apiserver_memory else 0.0,
+                    "inflight_requests": self._safe_float_conversion(apiserver_requests.get('latest_value', 0.0)) if apiserver_requests else 0.0,
+                    "status": self._get_resource_status(
+                        max(
+                            self._safe_float_conversion(apiserver_cpu.get('latest_value', 0.0)) if apiserver_cpu else 0.0,
+                            self._safe_float_conversion(apiserver_memory.get('latest_value', 0.0)) if apiserver_memory else 0.0
+                        ), 
+                        [50, 80]
+                    )
+                })
+            
+            # etcd metrics
+            etcd_cpu = control_plane.get('etcd_cpu_usage_percentage', {})
+            etcd_memory = control_plane.get('etcd_memory_usage_percentage', {})
+            etcd_db = control_plane.get('etcd_database_usage_percentage', {})
+            
+            if etcd_cpu or etcd_memory or etcd_db:
+                utilization_summary["control_plane_health"]["etcd"].update({
+                    "cpu_usage": self._safe_float_conversion(etcd_cpu.get('latest_value', 0.0)) if etcd_cpu else 0.0,
+                    "memory_usage": self._safe_float_conversion(etcd_memory.get('latest_value', 0.0)) if etcd_memory else 0.0,
+                    "database_usage": self._safe_float_conversion(etcd_db.get('latest_value', 0.0)) if etcd_db else 0.0,
+                    "status": self._get_resource_status(
+                        max(
+                            self._safe_float_conversion(etcd_cpu.get('latest_value', 0.0)) if etcd_cpu else 0.0,
+                            self._safe_float_conversion(etcd_memory.get('latest_value', 0.0)) if etcd_memory else 0.0,
+                            self._safe_float_conversion(etcd_db.get('latest_value', 0.0)) if etcd_db else 0.0
+                        ), 
+                        [50, 80]
+                    )
+                })
+            
+            # Cluster Autoscaler metrics (from autoscaler_metrics sub-section)
+            autoscaler_metrics = control_plane.get('autoscaler_metrics', {})
+            if autoscaler_metrics:
+                safe_to_autoscale = autoscaler_metrics.get('cluster_autoscaler_cluster_safe_to_autoscale', {})
+                scale_down_cooldown = autoscaler_metrics.get('cluster_autoscaler_scale_down_in_cooldown', {})
+                unneeded_nodes = autoscaler_metrics.get('cluster_autoscaler_unneeded_nodes_count', {})
+                unschedulable_pods = autoscaler_metrics.get('cluster_autoscaler_unschedulable_pods_count', {})
+                
+                utilization_summary["control_plane_health"]["autoscaler"] = {
+                    "safe_to_autoscale": self._safe_float_conversion(safe_to_autoscale.get('latest_value', 0.0)) > 0 if safe_to_autoscale else False,
+                    "scale_down_in_cooldown": self._safe_float_conversion(scale_down_cooldown.get('latest_value', 0.0)) > 0 if scale_down_cooldown else False,
+                    "unneeded_nodes_count": self._safe_float_conversion(unneeded_nodes.get('latest_value', 0.0)) if unneeded_nodes else 0.0,
+                    "unschedulable_pods_count": self._safe_float_conversion(unschedulable_pods.get('latest_value', 0.0)) if unschedulable_pods else 0.0,
+                    "status": "healthy" if (self._safe_float_conversion(safe_to_autoscale.get('latest_value', 0.0)) > 0 if safe_to_autoscale else False) else "warning"
+                }
+            
+            # Overall control plane status
+            api_status = utilization_summary["control_plane_health"]["apiserver"]["status"]
+            etcd_status = utilization_summary["control_plane_health"]["etcd"]["status"]
+            
+            if api_status == "critical" or etcd_status == "critical":
+                overall_status = "critical"
+            elif api_status == "warning" or etcd_status == "warning":
+                overall_status = "warning"
+            elif api_status == "healthy" and etcd_status == "healthy":
+                overall_status = "healthy"
+            else:
+                overall_status = "unknown"
+                
+            utilization_summary["control_plane_health"]["overall_status"] = overall_status
+        else:
+            self.logger.warning("No control plane metrics available")
+        
+        # 4. Workload Distribution (from Container Insights + Azure Pod Metrics) - FIXED
+        workload_distribution = enhanced_metrics.get('workload_distribution', {})
+        azure_pod_metrics = enhanced_metrics.get('azure_pod_metrics', {})
+
+        self.logger.info(f"Processing workload distribution: type={type(workload_distribution)}, value={workload_distribution}")
+
+        if workload_distribution and isinstance(workload_distribution, dict):
+            # Check if it's an empty dict
+            if not workload_distribution or workload_distribution.get('TotalPods', 0) == 0:
+                self.logger.warning("Workload distribution is empty or has no pods")
+                utilization_summary["workload_distribution"].update({
+                    "total_pods": 0,
+                    "running_pods": 0,
+                    "pending_pods": 0,
+                    "failed_pods": 0,
+                    "succeeded_pods": 0,
+                    "running_percentage": 0.0,
+                    "source": "no_data",
+                    "status": "no_data_available"
+                })
+            else:
+                # Handle valid workload distribution structure
+                total_pods = self._safe_int_conversion(workload_distribution.get('TotalPods', 0))
+                running_pods = self._safe_int_conversion(workload_distribution.get('RunningPods', 0))
+                pending_pods = self._safe_int_conversion(workload_distribution.get('PendingPods', 0))
+                failed_pods = self._safe_int_conversion(workload_distribution.get('FailedPods', 0))
+                succeeded_pods = self._safe_int_conversion(workload_distribution.get('SucceededPods', 0))
+                
+                running_percentage = (running_pods / total_pods * 100) if total_pods > 0 else 0.0
+                
+                utilization_summary["workload_distribution"].update({
+                    "total_pods": total_pods,
+                    "running_pods": running_pods,
+                    "pending_pods": pending_pods,
+                    "failed_pods": failed_pods,
+                    "succeeded_pods": succeeded_pods,
+                    "running_percentage": running_percentage,
+                    "source": workload_distribution.get('source', 'container_insights'),
+                    "status": "success"
+                })
+                
+                # Handle namespace breakdown if available
+                namespace_breakdown = workload_distribution.get('namespace_breakdown', [])
+                if namespace_breakdown and isinstance(namespace_breakdown, list) and len(namespace_breakdown) > 0:
+                    utilization_summary["workload_distribution"]["namespace_breakdown"] = [
+                        {
+                            "namespace": ns.get('Namespace', 'unknown'),
+                            "total_pods": self._safe_int_conversion(ns.get('TotalPods', 0)),
+                            "running_pods": self._safe_int_conversion(ns.get('RunningPods', 0)),
+                            "pending_pods": self._safe_int_conversion(ns.get('PendingPods', 0)),
+                            "failed_pods": self._safe_int_conversion(ns.get('FailedPods', 0)),
+                            "succeeded_pods": self._safe_int_conversion(ns.get('SucceededPods', 0))
+                        }
+                        for ns in namespace_breakdown
+                    ]
+                    self.logger.info(f"Namespace breakdown processed: {len(namespace_breakdown)} namespaces")
+                
+                self.logger.info(f"Workload distribution processed successfully: {total_pods} total pods, {running_percentage:.1f}% running")
+        else:
+            self.logger.warning(f"Workload distribution data invalid: type={type(workload_distribution)}, value={workload_distribution}")
+            utilization_summary["workload_distribution"].update({
+                "total_pods": 0,
+                "running_pods": 0,
+                "pending_pods": 0,
+                "failed_pods": 0,
+                "succeeded_pods": 0,
+                "running_percentage": 0.0,
+                "source": "invalid_data",
+                "status": "collection_failed"
+            })
+        
+        # Add Azure Pod Metrics (from Azure Monitor)
+        if azure_pod_metrics:
+            pod_ready_metric = azure_pod_metrics.get('kube_pod_status_ready', {})
+            pod_phase_metric = azure_pod_metrics.get('kube_pod_status_phase', {})
+            
+            utilization_summary["workload_distribution"]["azure_pod_metrics"] = {
+                "ready_pods_count": self._safe_float_conversion(pod_ready_metric.get('latest_value', 0.0)) if pod_ready_metric else 0.0,
+                "pod_phase_status": self._safe_float_conversion(pod_phase_metric.get('latest_value', 0.0)) if pod_phase_metric else 0.0,
+                "ready_pods_average": self._safe_float_conversion(pod_ready_metric.get('average_value', 0.0)) if pod_ready_metric else 0.0,
+                "data_points_ready": pod_ready_metric.get('data_points', 0) if pod_ready_metric else 0,
+                "data_points_phase": pod_phase_metric.get('data_points', 0) if pod_phase_metric else 0
+            }
+            self.logger.info(f"Azure pod metrics processed: {utilization_summary['workload_distribution']['azure_pod_metrics']}")
+        
+        # 5. Combined Analysis (from enhanced metrics) - FIXED
+        combined_analysis = enhanced_metrics.get('combined_analysis', {})
+        if combined_analysis:
+            self.logger.info(f"Processing combined analysis: {list(combined_analysis.keys())}")
+            
+            utilization_summary["combined_analysis"].update({
+                "health_score": self._safe_float_conversion(combined_analysis.get('cluster_health_score', 0.0)),
+                "data_consistency_score": self._safe_float_conversion(combined_analysis.get('data_consistency_score', 0.0)),
+                "recommendations": combined_analysis.get('recommendations', [])
+            })
+            
+            # Data source status
+            data_validation = combined_analysis.get('data_source_validation', {})
+            if data_validation:
+                utilization_summary["combined_analysis"]["data_source_status"] = {
+                    "azure_monitor_available": data_validation.get('azure_monitor_available', False),
+                    "container_insights_available": data_validation.get('container_insights_available', False),
+                    "azure_metrics_collected": data_validation.get('azure_metrics_collected', 0),
+                    "azure_data_points": data_validation.get('azure_data_points', 0),
+                    "ci_data_points": data_validation.get('ci_data_points', 0),
+                    "primary_source": data_validation.get('primary_source', 'unknown'),
+                    "data_coverage_percentage": self._safe_float_conversion(data_validation.get('data_coverage_percentage', 0.0))
+                }
+            
+            # Add validation data if available
+            other_validation = combined_analysis.get('data_validation', {})
+            if other_validation:
+                utilization_summary["combined_analysis"]["cross_validation"] = other_validation
+                
+            self.logger.info(f"Combined analysis processed: health_score={utilization_summary['combined_analysis']['health_score']}")
+        else:
+            self.logger.warning("No combined analysis available")
+        
+        # 6. Node Pool Breakdown (calculated from node_pools)
+        for pool in node_pools:
+            if not isinstance(pool, dict):
+                continue
+                
+            vm_size = pool.get("vm_size", "")
+            count = self._safe_int_conversion(pool.get("count", 0))
+            vcores, memory_gb = self._estimate_vm_resources(vm_size)
+            
+            utilization_summary["cluster_overview"]["total_vcores"] += vcores * count
+            utilization_summary["cluster_overview"]["total_memory_gb"] += memory_gb * count
+            
+            utilization_summary["node_pool_breakdown"].append({
+                "name": pool.get("name", "unknown"),
+                "vm_size": vm_size,
+                "node_count": count,
+                "auto_scaling_enabled": pool.get("auto_scaling_enabled", False),
+                "total_vcores": vcores * count,
+                "total_memory_gb": memory_gb * count,
+                "mode": pool.get("mode", "User"),
+                "provisioning_state": pool.get("provisioning_state", "Unknown")
+            })
+        
+        # 7. Metrics Collection Status (comprehensive for ALL metrics)
+        metadata = enhanced_metrics.get('collection_metadata', {})
+        utilization_summary["metrics_collection_status"].update({
+            "total_data_points": self._safe_int_conversion(metadata.get('total_data_points', 0)),
+            "successful_sources": self._safe_int_conversion(metadata.get('successful_sources', 0)),
+            "available_metrics": self._get_available_metrics_list(enhanced_metrics)
+        })
+        
+        # Add detailed metrics breakdown
+        azure_source = enhanced_metrics.get('data_sources', {}).get('azure_monitor', {})
+        ci_source = enhanced_metrics.get('data_sources', {}).get('container_insights', {})
+        k8s_source = enhanced_metrics.get('data_sources', {}).get('kubernetes_api', {})
+        
+        utilization_summary["metrics_collection_status"]["detailed_breakdown"] = {
+            "azure_monitor": {
+                "status": azure_source.get('status', 'unknown'),
+                "metrics_collected": len(azure_source.get('metrics_collected', [])),
+                "data_points": self._safe_int_conversion(azure_source.get('data_points', 0)),
+                "metric_categories": {
+                    "node_performance": len([m for m in azure_source.get('metrics_collected', []) if m.startswith('node_')]),
+                    "control_plane": len([m for m in azure_source.get('metrics_collected', []) if m.startswith(('apiserver_', 'etcd_'))]),
+                    "autoscaler": len([m for m in azure_source.get('metrics_collected', []) if 'autoscaler' in m]),
+                    "node_resources": len([m for m in azure_source.get('metrics_collected', []) if m.startswith('kube_node_')]),
+                    "pod_metrics": len([m for m in azure_source.get('metrics_collected', []) if m.startswith('kube_pod_')])
+                },
+                "collection_errors": azure_source.get('collection_errors', [])
+            },
+            "container_insights": {
+                "status": ci_source.get('status', 'unknown'),
+                "queries_executed": len(ci_source.get('queries_executed', [])),
+                "data_points": self._safe_int_conversion(ci_source.get('data_points', 0)),
+                "collection_errors": ci_source.get('collection_errors', [])
+            },
+            "kubernetes_api": {
+                "status": k8s_source.get('status', 'unknown'),
+                "resources_discovered": len(k8s_source.get('resources_discovered', []))
+            }
+        }
+        
+        self.logger.info(f"Utilization summary completed: Azure Monitor: {utilization_summary['metrics_collection_status']['detailed_breakdown']['azure_monitor']['metrics_collected']} metrics, Container Insights: {utilization_summary['metrics_collection_status']['detailed_breakdown']['container_insights']['data_points']} data points")
+        
+        return utilization_summary
+    
+    # ===== HELPER METHODS (Complete implementations) =====
+    
+    def _safe_float_conversion(self, value) -> float:
+        """Safely convert value to float."""
+        if value is None:
+            return 0.0
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            self.logger.debug(f"Failed to convert {value} to float, returning 0.0")
+            return 0.0
+    
+    def _safe_int_conversion(self, value) -> int:
+        """Safely convert value to int."""
+        if value is None:
+            return 0
+        try:
+            return int(float(value))  # Convert through float first to handle string decimals
+        except (ValueError, TypeError):
+            self.logger.debug(f"Failed to convert {value} to int, returning 0")
+            return 0
+    
+    def _get_resource_status(self, value: float, thresholds: List[float]) -> str:
+        """Get resource status based on value and thresholds."""
+        if value == 0.0:
+            return "unknown"
+        elif value < thresholds[0]:
+            return "healthy"
+        elif value < thresholds[1]:
+            return "warning"
+        else:
+            return "critical"
+    
+    def _get_available_metrics_list(self, enhanced_metrics: Dict[str, Any]) -> List[str]:
+        """Get list of available metrics from enhanced metrics structure."""
+        available_metrics = []
+        
+        # Azure Monitor metrics
+        node_performance = enhanced_metrics.get('node_performance', {})
+        control_plane = enhanced_metrics.get('control_plane_health', {})
+        
+        available_metrics.extend(node_performance.keys())
+        available_metrics.extend(control_plane.keys())
+        
+        # Container Insights metrics
+        if enhanced_metrics.get('cluster_overview'):
+            available_metrics.append('cluster_overview')
+        if enhanced_metrics.get('workload_distribution'):
+            available_metrics.append('workload_distribution')
+        
+        # Combined analysis
+        if enhanced_metrics.get('combined_analysis'):
+            available_metrics.append('combined_analysis')
+        
+        return available_metrics
+    
+    def _create_empty_enhanced_metrics_structure(self, cluster_name: str) -> Dict[str, Any]:
+        """Create empty enhanced metrics structure when collection fails."""
+        return {
+            'cluster_name': cluster_name,
+            'collection_period': {
+                'start_time': (datetime.now(timezone.utc) - timedelta(hours=self.metrics_hours)).isoformat(),
+                'end_time': datetime.now(timezone.utc).isoformat(),
+                'hours': self.metrics_hours
+            },
+            'node_performance': {},
+            'cluster_overview': {},
+            'workload_distribution': {},
+            'control_plane_health': {},
+            'combined_analysis': {
+                'cluster_health_score': 0.0,
+                'data_consistency_score': 0.0,
+                'recommendations': ['Enhanced metrics collection failed - check Azure Monitor configuration']
+            },
+            'data_sources': {
+                'azure_monitor': {
+                    'status': 'failed',
+                    'metrics_collected': [],
+                    'data_points': 0,
+                    'collection_errors': ['Failed to collect Azure Monitor metrics']
+                },
+                'container_insights': {
+                    'status': 'failed',
+                    'queries_executed': [],
+                    'data_points': 0,
+                    'collection_errors': ['Failed to collect Container Insights metrics']
+                },
+                'kubernetes_api': {
+                    'status': 'not_attempted',
+                    'resources_discovered': [],
+                    'collection_errors': []
+                }
+            },
+            'collection_metadata': {
+                'total_data_points': 0,
+                'successful_sources': 0,
+                'failed_sources': 3,
+                'data_freshness_score': 0.0,
+                'health_score': 0.0
+            }
+        }
+    
+    def _estimate_vm_resources(self, vm_size: str) -> tuple:
+        """Estimate vCores and memory for VM size."""
+        if not isinstance(vm_size, str):
+            vm_size = ""
+            
+        # Azure VM size mappings (simplified)
+        vm_specs = {
+            "Standard_B2s": (2, 4),
+            "Standard_B4ms": (4, 16),
+            "Standard_D2s_v3": (2, 8),
+            "Standard_D4s_v3": (4, 16),
+            "Standard_D8s_v3": (8, 32),
+            "Standard_D16s_v3": (16, 64),
+            "Standard_E2s_v3": (2, 16),
+            "Standard_E4s_v3": (4, 32),
+            "Standard_E8s_v3": (8, 64),
+            "Standard_F2s_v2": (2, 4),
+            "Standard_F4s_v2": (4, 8),
+            "Standard_F8s_v2": (8, 16)
+        }
+        
+        return vm_specs.get(vm_size, (2, 8))  # Default to 2 cores, 8GB
+    
+    # ===== SIMPLIFIED COST COLLECTION (fixed) =====
+    
     async def _get_resource_group_costs_safe(self) -> Dict[str, Any]:
-        """Get resource group costs with comprehensive null/error handling - no duplication."""
+        """Get resource group costs with simplified error handling."""
         # Default cost structure to return if everything fails
         default_cost_structure = {
             "cost_summary": {
@@ -175,30 +969,10 @@ class DiscoveryClient(BaseClient):
                 self.logger.error(f"Failed to get resource group costs: {e}")
                 rg_costs = {}
             
-            # Try to get detailed resource-level costs
-            detailed_costs = None
-            try:
-                detailed_costs = await self.cost_client.get_detailed_resource_costs(
-                    self.resource_group, self.cost_analysis_days
-                )
-                self.logger.info(f"Detailed costs result type: {type(detailed_costs)}")
-                
-                if detailed_costs is None:
-                    self.logger.warning("get_detailed_resource_costs returned None")
-                    detailed_costs = {}
-                elif not isinstance(detailed_costs, dict):
-                    self.logger.warning(f"get_detailed_resource_costs returned unexpected type: {type(detailed_costs)}")
-                    detailed_costs = {}
-                    
-            except Exception as e:
-                self.logger.error(f"Failed to get detailed resource costs: {e}")
-                detailed_costs = {}
-            
-            # Build cost structure with NO duplication - just references to the original data
+            # Build cost structure - simplified without detailed resource costs
             enhanced_costs = {
                 "overall_costs": rg_costs if isinstance(rg_costs, dict) else {},
-                "detailed_resource_costs": detailed_costs if isinstance(detailed_costs, dict) else {},
-                "collection_status": "partial" if (rg_costs or detailed_costs) else "failed"
+                "collection_status": "success" if rg_costs else "failed"
             }
             
             # Only extract cost summary for easy access
@@ -212,8 +986,9 @@ class DiscoveryClient(BaseClient):
             else:
                 enhanced_costs["cost_summary"] = default_cost_structure["cost_summary"]
             
-            # Get top cost resources (this is derived data, not duplication)
-            enhanced_costs["top_cost_resources"] = self._get_top_cost_resources_safe(detailed_costs)
+            # Add empty placeholders for compatibility
+            enhanced_costs["detailed_resource_costs"] = {}
+            enhanced_costs["top_cost_resources"] = []
             
             self.logger.info(f"Cost collection completed with status: {enhanced_costs['collection_status']}")
             return enhanced_costs
@@ -222,634 +997,3 @@ class DiscoveryClient(BaseClient):
             self.logger.error(f"Failed to get resource group costs: {e}")
             default_cost_structure["error_message"] = str(e)
             return default_cost_structure
-    
-    def _get_top_cost_resources_safe(self, detailed_costs: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Safely get top cost resources with null handling."""
-        try:
-            if not detailed_costs or not isinstance(detailed_costs, dict):
-                return []
-            
-            resources = detailed_costs.get("resources")
-            if not resources or not isinstance(resources, dict):
-                return []
-            
-            # Sort resources by cost
-            sorted_resources = []
-            for resource_id, resource_data in resources.items():
-                if isinstance(resource_data, dict):
-                    total_cost = resource_data.get("total_cost", 0.0)
-                    if total_cost is not None:
-                        sorted_resources.append((resource_id, resource_data, total_cost))
-            
-            # Sort by cost descending
-            sorted_resources.sort(key=lambda x: x[2], reverse=True)
-            
-            return [
-                {
-                    "resource_id": resource_id,
-                    "resource_type": resource_data.get("resource_type", "Unknown"),
-                    "service_name": resource_data.get("service_name", "Unknown"),
-                    "total_cost": total_cost,
-                    "currency": resource_data.get("currency", "USD")
-                }
-                for resource_id, resource_data, total_cost in sorted_resources[:10]
-            ]
-        except Exception as e:
-            self.logger.error(f"Error getting top cost resources: {e}")
-            return []
-    
-    async def _discover_cluster_comprehensive(self, cluster: Dict[str, Any]) -> Dict[str, Any]:
-        """Discover comprehensive data for a single cluster."""
-        cluster_name = cluster["name"]
-        resource_group = cluster["resource_group"]
-        cluster_id = cluster["id"]
-        
-        self.logger.info(f"Processing cluster: {cluster_name}")
-        
-        cluster_data = {
-            "cluster_info": cluster,
-            "node_pools": [],
-            "kubernetes_resources": {},
-            "metrics": {},
-            "utilization_summary": {},
-            "node_count": 0,
-            "pod_count": 0,
-            "discovery_status": "in_progress"
-        }
-        
-        try:
-            # Discover node pools
-            node_pools = await self.aks_client.discover_node_pools(cluster_name, resource_group)
-            cluster_data["node_pools"] = node_pools if node_pools is not None else []
-            cluster_data["node_count"] = sum(pool.get("count", 0) for pool in cluster_data["node_pools"] if isinstance(pool, dict))
-            
-            # Get cluster metrics using the CORRECT method name
-            self.logger.info(f"Attempting to collect metrics for cluster: {cluster_name}")
-            
-            try:
-                # Use the correct method name: get_enhanced_cluster_metrics
-                metrics = await self.monitor_client.get_enhanced_cluster_metrics(
-                    cluster_id, cluster_name, self.metrics_hours
-                )
-                
-                if metrics:
-                    self.logger.info(f"Successfully collected metrics for {cluster_name}: {type(metrics)}")
-                    if isinstance(metrics, dict):
-                        self.logger.info(f"Metrics keys: {list(metrics.keys())}")
-                        
-                        # Debug the actual data content
-                        data_points = metrics.get('collection_metadata', {}).get('total_data_points', 0)
-                        self.logger.info(f"Metrics data points: {data_points}")
-                        
-                        if data_points == 0:
-                            self.logger.warning(f"Monitor client returned metrics structure but no actual data points for {cluster_name}")
-                            self.logger.info(f"Metrics collection metadata: {metrics.get('collection_metadata', {})}")
-                            
-                            # Check what's in the actual metrics sections
-                            cluster_metrics = metrics.get('cluster_metrics', {})
-                            self.logger.info(f"Cluster metrics sections: {list(cluster_metrics.keys()) if cluster_metrics else 'empty'}")
-                            
-                            performance_counters = metrics.get('performance_counters', {})
-                            self.logger.info(f"Performance counters: {list(performance_counters.keys()) if performance_counters else 'empty'}")
-                            
-                            container_insights = metrics.get('container_insights_metrics', {})
-                            self.logger.info(f"Container insights: {list(container_insights.keys()) if container_insights else 'empty'}")
-                            
-                            # If no actual metrics data, enhance the structure with estimated data
-                            if data_points == 0:
-                                self.logger.info(f"Enhancing metrics with estimated data for {cluster_name}")
-                                metrics = self._enhance_metrics_with_estimates(metrics, cluster_data["node_pools"])
-                else:
-                    self.logger.warning(f"Monitor client returned empty metrics for {cluster_name}")
-                    metrics = self._create_basic_metrics_structure(cluster_name)
-                    
-            except Exception as e:
-                self.logger.error(f"Enhanced metrics collection failed for {cluster_name}: {e}")
-                import traceback
-                self.logger.error(f"Metrics collection traceback: {traceback.format_exc()}")
-                metrics = self._create_basic_metrics_structure(cluster_name)
-            
-            cluster_data["metrics"] = metrics if metrics is not None else {}
-            cluster_data["utilization_summary"] = self._build_utilization_summary(
-                cluster_data["metrics"], 
-                cluster_data["node_pools"]
-            )
-            
-            # Discover Kubernetes resources if client available
-            if self.k8s_client:
-                try:
-                    kubeconfig_data = await self.aks_client.get_cluster_credentials(cluster_name, resource_group)
-                    
-                    if kubeconfig_data:
-                        k8s_cluster_client = KubernetesClient(
-                            config_dict={"cluster_name": cluster_name},
-                            kubeconfig_data=kubeconfig_data
-                        )
-                        await k8s_cluster_client.connect()
-                        
-                        k8s_resources = await k8s_cluster_client.discover_all_resources()
-                        cluster_data["kubernetes_resources"] = k8s_resources if k8s_resources is not None else {}
-                        cluster_data["pod_count"] = len(k8s_resources.get("pods", [])) if isinstance(k8s_resources, dict) else 0
-                        
-                        await k8s_cluster_client.disconnect()
-                    else:
-                        cluster_data["kubernetes_resources"] = {"error": "Failed to get cluster credentials"}
-                        
-                except Exception as e:
-                    self.logger.warning(f"Kubernetes resource discovery failed for {cluster_name}: {e}")
-                    cluster_data["kubernetes_resources"] = {"error": str(e)}
-            
-            cluster_data["discovery_status"] = "completed"
-            
-        except Exception as e:
-            self.logger.error(f"Error processing cluster {cluster_name}: {e}")
-            cluster_data["discovery_status"] = "failed"
-            cluster_data["error"] = str(e)
-        
-        return cluster_data
-    
-    def _enhance_metrics_with_estimates(self, metrics: Dict[str, Any], node_pools: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Enhance metrics structure with estimated data when actual metrics are unavailable."""
-        if not isinstance(metrics, dict):
-            return metrics
-            
-        enhanced_metrics = metrics.copy()
-        
-        # Calculate estimated utilization based on node pool configurations
-        total_vcores = 0
-        total_memory_gb = 0
-        total_nodes = 0
-        
-        for pool in node_pools:
-            if isinstance(pool, dict):
-                vm_size = pool.get("vm_size", "")
-                count = pool.get("count", 0)
-                vcores, memory_gb = self._estimate_vm_resources(vm_size)
-                
-                total_vcores += vcores * count
-                total_memory_gb += memory_gb * count
-                total_nodes += count
-        
-        # Create estimated utilization (conservative estimates)
-        estimated_cpu_util = 25.0  # Conservative estimate
-        estimated_memory_util = 35.0  # Conservative estimate
-        
-        # Update utilization summary with estimates
-        enhanced_utilization = {
-            "cluster_wide_utilization": {
-                "avg_cpu_utilization": estimated_cpu_util,
-                "avg_memory_utilization": estimated_memory_util,
-                "peak_cpu_utilization": estimated_cpu_util * 1.5,
-                "peak_memory_utilization": estimated_memory_util * 1.3,
-                "avg_disk_utilization": 20.0,
-                "peak_disk_utilization": 30.0,
-                "network_in_bytes_per_sec": 1000000,
-                "network_out_bytes_per_sec": 800000
-            },
-            "control_plane_health": {
-                "apiserver_cpu_usage": 10.0,
-                "apiserver_memory_usage": 15.0,
-                "etcd_cpu_usage": 5.0,
-                "etcd_memory_usage": 8.0,
-                "etcd_database_usage": 30.0
-            },
-            "cluster_autoscaler_status": {
-                "safe_to_autoscale": True,
-                "scale_down_in_cooldown": False,
-                "unneeded_nodes_count": 0.0,
-                "unschedulable_pods_count": 0.0
-            },
-            "resource_pressure_indicators": {
-                "cpu_pressure": False,
-                "memory_pressure": False,
-                "disk_pressure": False,
-                "network_pressure": False
-            },
-            "workload_distribution": {
-                "total_pods": max(total_nodes * 10, 20),
-                "running_pods": max(total_nodes * 9, 18),
-                "pending_pods": 1,
-                "failed_pods": 1,
-                "ready_pods": max(total_nodes * 8, 16),
-                "pods_by_namespace": {
-                    "kube-system": max(total_nodes * 3, 8),
-                    "default": max(total_nodes * 4, 6),
-                    "monitoring": max(total_nodes * 2, 4)
-                },
-                "system_workloads_percentage": 30.0
-            }
-        }
-        
-        enhanced_metrics["utilization_summary"] = enhanced_utilization
-        
-        # Update collection metadata to indicate estimates were used
-        collection_metadata = enhanced_metrics.get("collection_metadata", {})
-        collection_metadata.update({
-            "metrics_collected": ["estimated_utilization"],
-            "estimation_used": True,
-            "estimation_reason": "no_actual_metrics_data_available",
-            "total_data_points": 1,
-            "data_sources": ["estimated"]
-        })
-        enhanced_metrics["collection_metadata"] = collection_metadata
-        
-        # Update health status
-        health_status = enhanced_metrics.get("health_status", {})
-        health_status.update({
-            "overall_status": "estimated",
-            "issues_detected": ["no_actual_metrics_available"],
-            "recommendations": [
-                "Configure Azure Monitor and Container Insights for detailed metrics",
-                "Verify Log Analytics workspace configuration",
-                "Check Azure Monitor permissions"
-            ]
-        })
-        enhanced_metrics["health_status"] = health_status
-        
-        self.logger.info(f"Enhanced metrics with estimated data - CPU: {estimated_cpu_util}%, Memory: {estimated_memory_util}%")
-        
-        return enhanced_metrics
-    
-    def _create_basic_metrics_structure(self, cluster_name: str) -> Dict[str, Any]:
-        """Create basic metrics structure when monitor client method fails."""
-        return {
-            "cluster_name": cluster_name,
-            "collection_period": {
-                "start_time": (datetime.now(timezone.utc) - timedelta(hours=self.metrics_hours)).isoformat(),
-                "end_time": datetime.now(timezone.utc).isoformat(),
-                "hours": self.metrics_hours
-            },
-            "cluster_metrics": {},
-            "container_insights_metrics": {},
-            "performance_counters": {},
-            "node_metrics": {},
-            "utilization_summary": {
-                "cluster_wide_utilization": {
-                    "avg_cpu_utilization": 0.0,
-                    "avg_memory_utilization": 0.0,
-                    "peak_cpu_utilization": 0.0,
-                    "peak_memory_utilization": 0.0
-                },
-                "resource_pressure_indicators": {
-                    "cpu_pressure": False,
-                    "memory_pressure": False,
-                    "network_pressure": False
-                }
-            },
-            "health_status": {
-                "overall_status": "unknown",
-                "issues_detected": ["metrics_collection_failed"],
-                "recommendations": ["check_monitor_client_configuration"]
-            },
-            "collection_metadata": {
-                "metrics_collected": [],
-                "metrics_failed": ["enhanced_metrics_unavailable"],
-                "total_data_points": 0,
-                "data_sources": []
-            }
-        }
-    
-    def _build_utilization_summary(self, metrics: Dict[str, Any], node_pools: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Build comprehensive utilization summary from enhanced metrics data."""
-        # Ensure inputs are valid
-        if not isinstance(metrics, dict):
-            metrics = {}
-        if not isinstance(node_pools, list):
-            node_pools = []
-        
-        utilization_summary = {
-            "cluster_overview": {
-                "node_count": sum(pool.get("count", 0) for pool in node_pools if isinstance(pool, dict)),
-                "total_vcores": 0,
-                "total_memory_gb": 0,
-                "node_pools_count": len(node_pools)
-            },
-            "resource_utilization": {
-                "cpu": {
-                    "average_utilization_percentage": 0.0,
-                    "peak_utilization_percentage": 0.0,
-                    "utilization_trend": "stable"
-                },
-                "memory": {
-                    "average_utilization_percentage": 0.0,
-                    "peak_utilization_percentage": 0.0,
-                    "utilization_trend": "stable"
-                },
-                "disk": {
-                    "average_utilization_percentage": 0.0,
-                    "peak_utilization_percentage": 0.0,
-                    "utilization_trend": "stable"
-                },
-                "network": {
-                    "inbound_bytes_per_sec": 0.0,
-                    "outbound_bytes_per_sec": 0.0,
-                    "total_throughput": 0.0
-                }
-            },
-            "control_plane_health": {
-                "apiserver_status": "unknown",
-                "etcd_status": "unknown",
-                "overall_health": "unknown"
-            },
-            "cluster_autoscaler": {
-                "enabled": False,
-                "safe_to_autoscale": False,
-                "unneeded_nodes": 0,
-                "unschedulable_pods": 0
-            },
-            "node_pool_breakdown": [],
-            "workload_distribution": {
-                "total_pods": 0,
-                "running_pods": 0,
-                "pending_pods": 0,
-                "failed_pods": 0,
-                "ready_pods": 0,
-                "pods_by_namespace": {},
-                "system_workloads_percentage": 0.0
-            },
-            "performance_indicators": {
-                "pods_scheduled_successfully": True,
-                "node_pressure_detected": False,
-                "cluster_auto_scaler_active": False,
-                "resource_constraints": [],
-                "alerts": []
-            },
-            "metrics_availability": metrics.get("collection_metadata", {}).get("metrics_collected", [])
-        }
-        
-        # Calculate totals from node pools
-        for pool in node_pools:
-            if not isinstance(pool, dict):
-                continue
-                
-            vm_size = pool.get("vm_size", "")
-            count = pool.get("count", 0)
-            
-            if not isinstance(count, (int, float)) or count < 0:
-                count = 0
-            
-            # Estimate cores and memory based on VM size
-            vcores, memory_gb = self._estimate_vm_resources(vm_size)
-            
-            utilization_summary["cluster_overview"]["total_vcores"] += vcores * count
-            utilization_summary["cluster_overview"]["total_memory_gb"] += memory_gb * count
-            
-            # Add node pool breakdown
-            utilization_summary["node_pool_breakdown"].append({
-                "name": pool.get("name", "unknown"),
-                "vm_size": vm_size,
-                "node_count": count,
-                "auto_scaling_enabled": pool.get("auto_scaling_enabled", False),
-                "total_vcores": vcores * count,
-                "total_memory_gb": memory_gb * count,
-                "mode": pool.get("mode", "User")
-            })
-            
-            # Check for auto-scaling
-            if pool.get("auto_scaling_enabled"):
-                utilization_summary["performance_indicators"]["cluster_auto_scaler_active"] = True
-        
-        # Process enhanced metrics data if available
-        if metrics and not metrics.get("error"):
-            # Extract from enhanced utilization summary structure
-            enhanced_utilization = metrics.get("utilization_summary", {})
-            
-            if isinstance(enhanced_utilization, dict):
-                # Update resource utilization with comprehensive data
-                cluster_utilization = enhanced_utilization.get("cluster_wide_utilization", {})
-                if isinstance(cluster_utilization, dict):
-                    # CPU utilization
-                    cpu_util = cluster_utilization.get("avg_cpu_utilization", 0.0)
-                    if isinstance(cpu_util, (int, float)):
-                        utilization_summary["resource_utilization"]["cpu"]["average_utilization_percentage"] = cpu_util
-                        utilization_summary["resource_utilization"]["cpu"]["peak_utilization_percentage"] = cluster_utilization.get("peak_cpu_utilization", cpu_util)
-                    
-                    # Memory utilization
-                    memory_util = cluster_utilization.get("avg_memory_utilization", 0.0)
-                    if isinstance(memory_util, (int, float)):
-                        utilization_summary["resource_utilization"]["memory"]["average_utilization_percentage"] = memory_util
-                        utilization_summary["resource_utilization"]["memory"]["peak_utilization_percentage"] = cluster_utilization.get("peak_memory_utilization", memory_util)
-                    
-                    # Disk utilization
-                    disk_util = cluster_utilization.get("avg_disk_utilization", 0.0)
-                    if isinstance(disk_util, (int, float)):
-                        utilization_summary["resource_utilization"]["disk"]["average_utilization_percentage"] = disk_util
-                        utilization_summary["resource_utilization"]["disk"]["peak_utilization_percentage"] = cluster_utilization.get("peak_disk_utilization", disk_util)
-                    
-                    # Network utilization
-                    network_in = cluster_utilization.get("network_in_bytes_per_sec", 0.0)
-                    network_out = cluster_utilization.get("network_out_bytes_per_sec", 0.0)
-                    if isinstance(network_in, (int, float)) and isinstance(network_out, (int, float)):
-                        utilization_summary["resource_utilization"]["network"]["inbound_bytes_per_sec"] = network_in
-                        utilization_summary["resource_utilization"]["network"]["outbound_bytes_per_sec"] = network_out
-                        utilization_summary["resource_utilization"]["network"]["total_throughput"] = network_in + network_out
-                
-                # Control plane health
-                control_plane = enhanced_utilization.get("control_plane_health", {})
-                if isinstance(control_plane, dict):
-                    api_cpu = control_plane.get("apiserver_cpu_usage", 0.0)
-                    etcd_cpu = control_plane.get("etcd_cpu_usage", 0.0)
-                    
-                    # Determine API server status
-                    if api_cpu > 0:
-                        if api_cpu < 50:
-                            utilization_summary["control_plane_health"]["apiserver_status"] = "healthy"
-                        elif api_cpu < 80:
-                            utilization_summary["control_plane_health"]["apiserver_status"] = "warning"
-                        else:
-                            utilization_summary["control_plane_health"]["apiserver_status"] = "critical"
-                    
-                    # Determine etcd status
-                    if etcd_cpu > 0:
-                        if etcd_cpu < 50:
-                            utilization_summary["control_plane_health"]["etcd_status"] = "healthy"
-                        elif etcd_cpu < 80:
-                            utilization_summary["control_plane_health"]["etcd_status"] = "warning"
-                        else:
-                            utilization_summary["control_plane_health"]["etcd_status"] = "critical"
-                    
-                    # Overall control plane health
-                    api_status = utilization_summary["control_plane_health"]["apiserver_status"]
-                    etcd_status = utilization_summary["control_plane_health"]["etcd_status"]
-                    
-                    if api_status == "healthy" and etcd_status == "healthy":
-                        utilization_summary["control_plane_health"]["overall_health"] = "healthy"
-                    elif "critical" in [api_status, etcd_status]:
-                        utilization_summary["control_plane_health"]["overall_health"] = "critical"
-                    else:
-                        utilization_summary["control_plane_health"]["overall_health"] = "warning"
-                
-                # Cluster autoscaler status
-                autoscaler_status = enhanced_utilization.get("cluster_autoscaler_status", {})
-                if isinstance(autoscaler_status, dict):
-                    utilization_summary["cluster_autoscaler"]["enabled"] = True
-                    utilization_summary["cluster_autoscaler"]["safe_to_autoscale"] = autoscaler_status.get("safe_to_autoscale", False)
-                    utilization_summary["cluster_autoscaler"]["unneeded_nodes"] = autoscaler_status.get("unneeded_nodes_count", 0)
-                    utilization_summary["cluster_autoscaler"]["unschedulable_pods"] = autoscaler_status.get("unschedulable_pods_count", 0)
-                
-                # Resource pressure indicators
-                pressure_indicators = enhanced_utilization.get("resource_pressure_indicators", {})
-                if isinstance(pressure_indicators, dict):
-                    utilization_summary["performance_indicators"]["node_pressure_detected"] = (
-                        pressure_indicators.get("cpu_pressure", False) or 
-                        pressure_indicators.get("memory_pressure", False) or
-                        pressure_indicators.get("disk_pressure", False)
-                    )
-                    
-                    # Add specific pressure alerts
-                    if pressure_indicators.get("cpu_pressure"):
-                        utilization_summary["performance_indicators"]["resource_constraints"].append("CPU pressure detected")
-                        utilization_summary["performance_indicators"]["alerts"].append({
-                            "type": "cpu_pressure",
-                            "severity": "warning",
-                            "message": "High CPU utilization detected across nodes"
-                        })
-                    
-                    if pressure_indicators.get("memory_pressure"):
-                        utilization_summary["performance_indicators"]["resource_constraints"].append("Memory pressure detected")
-                        utilization_summary["performance_indicators"]["alerts"].append({
-                            "type": "memory_pressure", 
-                            "severity": "warning",
-                            "message": "High memory utilization detected across nodes"
-                        })
-                    
-                    if pressure_indicators.get("disk_pressure"):
-                        utilization_summary["performance_indicators"]["resource_constraints"].append("Disk pressure detected")
-                        utilization_summary["performance_indicators"]["alerts"].append({
-                            "type": "disk_pressure",
-                            "severity": "warning", 
-                            "message": "High disk utilization detected across nodes"
-                        })
-                
-                # Workload distribution
-                workload_dist = enhanced_utilization.get("workload_distribution", {})
-                if isinstance(workload_dist, dict):
-                    utilization_summary["workload_distribution"].update(workload_dist)
-        
-        # Add performance insights based on collected data
-        self._add_performance_insights(utilization_summary)
-        
-        return utilization_summary
-    
-    def _add_performance_insights(self, utilization_summary: Dict[str, Any]) -> None:
-        """Add performance insights and recommendations based on utilization data."""
-        insights = []
-        
-        # CPU insights
-        cpu_util = utilization_summary["resource_utilization"]["cpu"]["average_utilization_percentage"]
-        if cpu_util > 80:
-            insights.append({
-                "type": "high_cpu_utilization",
-                "severity": "warning",
-                "message": f"CPU utilization is high at {cpu_util:.1f}%",
-                "recommendation": "Consider scaling out or optimizing workloads"
-            })
-        elif cpu_util < 20:
-            insights.append({
-                "type": "low_cpu_utilization",
-                "severity": "info",
-                "message": f"CPU utilization is low at {cpu_util:.1f}%",
-                "recommendation": "Consider scaling down or consolidating workloads for cost optimization"
-            })
-        
-        # Memory insights
-        memory_util = utilization_summary["resource_utilization"]["memory"]["average_utilization_percentage"]
-        if memory_util > 80:
-            insights.append({
-                "type": "high_memory_utilization",
-                "severity": "warning",
-                "message": f"Memory utilization is high at {memory_util:.1f}%",
-                "recommendation": "Consider adding more nodes or optimizing memory usage"
-            })
-        elif memory_util < 20:
-            insights.append({
-                "type": "low_memory_utilization",
-                "severity": "info",
-                "message": f"Memory utilization is low at {memory_util:.1f}%",
-                "recommendation": "Consider using smaller VM sizes for cost optimization"
-            })
-        
-        # Autoscaler insights
-        if utilization_summary["cluster_autoscaler"]["enabled"]:
-            unneeded_nodes = utilization_summary["cluster_autoscaler"]["unneeded_nodes"]
-            if unneeded_nodes > 0:
-                insights.append({
-                    "type": "unneeded_nodes",
-                    "severity": "info",
-                    "message": f"{unneeded_nodes} nodes identified as unneeded by autoscaler",
-                    "recommendation": "These nodes may be scaled down automatically"
-                })
-            
-            unschedulable_pods = utilization_summary["cluster_autoscaler"]["unschedulable_pods"]
-            if unschedulable_pods > 0:
-                insights.append({
-                    "type": "unschedulable_pods",
-                    "severity": "warning",
-                    "message": f"{unschedulable_pods} pods cannot be scheduled",
-                    "recommendation": "Check resource requests and node capacity"
-                })
-        
-        # Control plane insights
-        control_plane_health = utilization_summary["control_plane_health"]["overall_health"]
-        if control_plane_health == "critical":
-            insights.append({
-                "type": "control_plane_critical",
-                "severity": "critical",
-                "message": "Control plane components showing critical resource usage",
-                "recommendation": "Monitor API server and etcd performance closely"
-            })
-        elif control_plane_health == "warning":
-            insights.append({
-                "type": "control_plane_warning",
-                "severity": "warning",
-                "message": "Control plane components showing elevated resource usage",
-                "recommendation": "Consider monitoring control plane performance"
-            })
-        
-        # Network insights
-        network_throughput = utilization_summary["resource_utilization"]["network"]["total_throughput"]
-        if network_throughput > 100000000:  # 100 MB/s
-            insights.append({
-                "type": "high_network_usage",
-                "severity": "info",
-                "message": f"High network throughput detected: {network_throughput / 1000000:.1f} MB/s",
-                "recommendation": "Monitor for potential network bottlenecks"
-            })
-        
-        # Disk insights
-        disk_util = utilization_summary["resource_utilization"]["disk"]["average_utilization_percentage"]
-        if disk_util > 85:
-            insights.append({
-                "type": "high_disk_utilization",
-                "severity": "warning",
-                "message": f"Disk utilization is high at {disk_util:.1f}%",
-                "recommendation": "Consider adding storage or optimizing disk usage"
-            })
-        
-        # Add insights to performance indicators
-        if "insights" not in utilization_summary["performance_indicators"]:
-            utilization_summary["performance_indicators"]["insights"] = []
-        utilization_summary["performance_indicators"]["insights"].extend(insights)
-    
-    def _estimate_vm_resources(self, vm_size: str) -> tuple:
-        """Estimate vCores and memory for VM size."""
-        if not isinstance(vm_size, str):
-            vm_size = ""
-            
-        # Azure VM size mappings (simplified)
-        vm_specs = {
-            "Standard_B2s": (2, 4),
-            "Standard_B4ms": (4, 16),
-            "Standard_D2s_v3": (2, 8),
-            "Standard_D4s_v3": (4, 16),
-            "Standard_D8s_v3": (8, 32),
-            "Standard_D16s_v3": (16, 64),
-            "Standard_E2s_v3": (2, 16),
-            "Standard_E4s_v3": (4, 32),
-            "Standard_E8s_v3": (8, 64),
-            "Standard_F2s_v2": (2, 4),
-            "Standard_F4s_v2": (4, 8),
-            "Standard_F8s_v2": (8, 16)
-        }
-        
-        return vm_specs.get(vm_size, (2, 8))  # Default to 2 cores, 8GB

@@ -109,7 +109,7 @@ class CostClient(BaseClient):
     
     @retry_with_backoff(max_retries=3)
     async def get_detailed_resource_costs(self, resource_group: str, days: int = 30) -> Dict[str, Any]:
-        """Get detailed per-resource costs."""
+        """Get detailed per-resource costs - FIXED implementation."""
         if not self._connected:
             raise DiscoveryException("CostManagement", "Client not connected")
         
@@ -118,12 +118,13 @@ class CostClient(BaseClient):
         scope = f"/subscriptions/{self.subscription_id}/resourceGroups/{resource_group}"
         
         try:
+            # Query for detailed resource breakdown
             query_definition = QueryDefinition(
                 type="Usage",
                 timeframe=TimeframeType.CUSTOM,
                 time_period=QueryTimePeriod(from_property=start_date, to=end_date),
                 dataset=QueryDataset(
-                    granularity=GranularityType.NONE,
+                    granularity=GranularityType.NONE,  # No time grouping, just resource grouping
                     aggregation={
                         "totalCost": QueryAggregation(name="PreTaxCost", function="Sum"),
                         "usageQuantity": QueryAggregation(name="UsageQuantity", function="Sum")
@@ -137,12 +138,103 @@ class CostClient(BaseClient):
                 )
             )
             
+            self.logger.info(f"Querying detailed resource costs for {resource_group}")
             response = self._client.query.usage(scope, query_definition)
+            
             return self._process_detailed_resource_costs(response, resource_group)
             
         except AzureError as e:
             self.logger.error(f"Failed to get detailed costs for {resource_group}", error=str(e))
-            return {"error": str(e), "resources": {}}
+            return {
+                'resource_group': resource_group,
+                'resources': {},
+                'summary': {
+                    'total_resources': 0,
+                    'total_cost': 0.0,
+                    'currency': 'USD'
+                },
+                'error': str(e)
+            }
+
+    def _process_detailed_resource_costs(self, response, resource_group: str) -> Dict[str, Any]:
+        """Process detailed resource costs with FIXED parsing."""
+        detailed_costs = {
+            'resource_group': resource_group,
+            'resources': {},
+            'summary': {
+                'total_resources': 0,
+                'total_cost': 0.0,
+                'currency': 'USD'
+            }
+        }
+        
+        if not hasattr(response, 'rows') or not response.rows:
+            self.logger.warning("No detailed cost data returned")
+            return detailed_costs
+        
+        self.logger.debug(f"Processing {len(response.rows)} detailed cost rows")
+        
+        for row in response.rows:
+            try:
+                if len(row) >= 4:  # Ensure we have minimum required fields
+                    cost = float(row[0]) if row[0] is not None else 0.0
+                    usage_quantity = float(row[1]) if row[1] is not None else 0.0
+                    
+                    # The next fields might be in different orders, so handle flexibly
+                    resource_id = "Unknown"
+                    resource_type = "Unknown"
+                    service_name = "Unknown"
+                    meter_category = "Unknown"
+                    
+                    # Parse remaining fields based on content patterns
+                    for i in range(2, len(row)):
+                        if row[i] and isinstance(row[i], str):
+                            field_value = str(row[i])
+                            
+                            # Resource ID usually contains /subscriptions/
+                            if '/subscriptions/' in field_value and resource_id == "Unknown":
+                                resource_id = field_value
+                            # Service name usually starts with Microsoft.
+                            elif field_value.startswith('Microsoft.') and service_name == "Unknown":
+                                service_name = field_value
+                            # Resource type is usually a single word/camelCase
+                            elif resource_type == "Unknown" and not field_value.startswith('Microsoft.') and '/' not in field_value:
+                                resource_type = field_value
+                            # Meter category is what's left
+                            elif meter_category == "Unknown":
+                                meter_category = field_value
+                    
+                    # Create unique resource key
+                    if resource_id == "Unknown":
+                        resource_key = f"{service_name}_{resource_type}_{len(detailed_costs['resources'])}"
+                    else:
+                        resource_key = resource_id
+                    
+                    # Add or update resource
+                    if resource_key not in detailed_costs['resources']:
+                        detailed_costs['resources'][resource_key] = {
+                            'resource_id': resource_id,
+                            'resource_type': resource_type,
+                            'service_name': service_name,
+                            'meter_category': meter_category,
+                            'total_cost': 0.0,
+                            'total_usage': 0.0,
+                            'currency': 'USD'
+                        }
+                    
+                    # Accumulate costs
+                    detailed_costs['resources'][resource_key]['total_cost'] += cost
+                    detailed_costs['resources'][resource_key]['total_usage'] += usage_quantity
+                    detailed_costs['summary']['total_cost'] += cost
+                    
+            except (ValueError, TypeError, IndexError) as e:
+                self.logger.warning(f"Error processing detailed cost row: {e}")
+                continue
+        
+        detailed_costs['summary']['total_resources'] = len(detailed_costs['resources'])
+        
+        self.logger.info(f"Processed detailed costs: {detailed_costs['summary']['total_resources']} resources, ${detailed_costs['summary']['total_cost']:.2f}")
+        return detailed_costs
     
     def _process_cost_response(self, response, resource_group: str, start_date: datetime, end_date: datetime) -> Dict[str, Any]:
         """Process cost API response into structured format."""
@@ -243,51 +335,38 @@ class CostClient(BaseClient):
         
         return costs
     
-    def _process_detailed_resource_costs(self, response, resource_group: str) -> Dict[str, Any]:
-        """Process detailed resource costs."""
-        detailed_costs = {
-            'resource_group': resource_group,
-            'resources': {},
-            'summary': {
-                'total_resources': 0,
-                'total_cost': 0.0,
-                'currency': 'USD'
-            }
-        }
         
-        if not hasattr(response, 'rows') or not response.rows:
-            return detailed_costs
-        
-        for row in response.rows:
-            try:
-                if len(row) >= 6:
-                    cost = float(row[0]) if row[0] is not None else 0.0
-                    usage_quantity = float(row[1]) if row[1] is not None else 0.0
-                    resource_id = row[2] if row[2] is not None else "Unknown"
-                    resource_type = row[3] if row[3] is not None else "Unknown"
-                    service_name = row[4] if row[4] is not None else "Unknown"
-                    meter_category = row[5] if row[5] is not None else "Unknown"
-                    
-                    if resource_id not in detailed_costs['resources']:
-                        detailed_costs['resources'][resource_id] = {
-                            'resource_id': resource_id,
-                            'resource_type': resource_type,
-                            'service_name': service_name,
-                            'total_cost': 0.0,
-                            'total_usage': 0.0,
-                            'currency': 'USD'
-                        }
-                    
-                    detailed_costs['resources'][resource_id]['total_cost'] += cost
-                    detailed_costs['resources'][resource_id]['total_usage'] += usage_quantity
-                    detailed_costs['summary']['total_cost'] += cost
-                    
-            except (ValueError, TypeError, IndexError) as e:
-                self.logger.warning(f"Error processing detailed cost row: {e}")
-                continue
-        
-        detailed_costs['summary']['total_resources'] = len(detailed_costs['resources'])
-        return detailed_costs
+    def _get_top_cost_resources_safe(self, detailed_costs: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Safely get top cost resources - FIXED to handle actual data structure."""
+        try:
+            if not detailed_costs or not isinstance(detailed_costs, dict):
+                return []
+            
+            resources = detailed_costs.get("resources")
+            if not resources or not isinstance(resources, dict):
+                return []
+            
+            # FIX: Sort resources by cost properly
+            sorted_resources = []
+            for resource_id, resource_data in resources.items():
+                if isinstance(resource_data, dict):
+                    total_cost = resource_data.get("total_cost", 0.0)
+                    if total_cost is not None and total_cost > 0:  # Only include resources with actual cost
+                        sorted_resources.append({
+                            "resource_id": resource_id,
+                            "resource_type": resource_data.get("resource_type", "Unknown"),
+                            "service_name": resource_data.get("service_name", "Unknown"),
+                            "total_cost": total_cost,
+                            "currency": resource_data.get("currency", "USD")
+                        })
+            
+            # Sort by cost descending and return top 10
+            sorted_resources.sort(key=lambda x: x["total_cost"], reverse=True)
+            return sorted_resources[:10]
+            
+        except Exception as e:
+            self.logger.error(f"Error getting top cost resources: {e}")
+            return []
     
     def _parse_usage_date(self, usage_date_raw) -> Optional[datetime]:
         """Parse usage date from various formats."""
