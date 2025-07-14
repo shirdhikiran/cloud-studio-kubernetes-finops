@@ -1,5 +1,5 @@
 # src/finops/clients/azure/monitor_client.py
-"""Completely fixed Azure Monitor client - no legacy issues."""
+"""Complete Azure Monitor client with all methods implemented."""
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta, timezone
@@ -17,7 +17,7 @@ logger = structlog.get_logger(__name__)
 
 
 class MonitorClient(BaseClient):
-    """Completely fixed Azure Monitor client with all 21 metrics."""
+    """Complete Azure Monitor client with comprehensive metrics collection."""
     
     def __init__(self, credential, subscription_id: str, config: Dict[str, Any]):
         super().__init__(config, "MonitorClient")
@@ -90,43 +90,32 @@ class MonitorClient(BaseClient):
     @retry_with_backoff(max_retries=3)
     async def get_enhanced_cluster_metrics(self, cluster_resource_id: str, cluster_name: str, 
                                          hours: int = 24) -> Dict[str, Any]:
-        """Get comprehensive metrics from 3 sources - completely rewritten."""
+        """Get comprehensive metrics from all sources with proper JSON structure."""
         if not self._connected:
             raise MetricsException("Monitor client not connected")
         
         end_time = datetime.now(timezone.utc)
         start_time = end_time - timedelta(hours=hours)
         
-        self.logger.info(f"Starting fixed comprehensive metrics collection for cluster: {cluster_name}")
+        self.logger.info(f"Starting comprehensive metrics collection for cluster: {cluster_name}")
         
-        # Define ALL 21 of your metrics
+        # Define ALL metrics we want to collect
         all_metrics_list = [
-            # API Server Metrics
             "apiserver_cpu_usage_percentage",
             "apiserver_memory_usage_percentage", 
             "apiserver_current_inflight_requests",
-            
-            # Cluster Autoscaler Metrics
             "cluster_autoscaler_cluster_safe_to_autoscale",
             "cluster_autoscaler_scale_down_in_cooldown",
             "cluster_autoscaler_unneeded_nodes_count",
             "cluster_autoscaler_unschedulable_pods_count",
-            
-            # etcd Metrics
             "etcd_cpu_usage_percentage",
             "etcd_database_usage_percentage",
             "etcd_memory_usage_percentage",
-            
-            # Node Resource Metrics
             "kube_node_status_allocatable_cpu_cores",
             "kube_node_status_allocatable_memory_bytes",
             "kube_node_status_condition",
-            
-            # Pod Metrics
             "kube_pod_status_ready",
             "kube_pod_status_phase",
-            
-            # Node Performance Metrics
             "node_cpu_usage_millicores",
             "node_cpu_usage_percentage", 
             "node_memory_rss_bytes",
@@ -148,294 +137,232 @@ class MonitorClient(BaseClient):
                 'end_time': end_time.isoformat(),
                 'hours': hours
             },
-            
-            # ===== REALISTIC METRIC GROUPS =====
-            'node_performance': {},           
-            'cluster_overview': {},           
-            'workload_distribution': {},      
-            'control_plane_health': {},       
-            'combined_analysis': {},          
-            
-            # ===== DATA SOURCE TRACKING =====
-            'data_sources': {
+            'metrics_by_source': {
                 'azure_monitor': {
+                    'source_name': 'Azure Monitor',
+                    'source_type': 'metrics_api',
                     'status': 'pending',
-                    'metrics_collected': [],
-                    'data_points': 0,
-                    'collection_errors': []
+                    'metrics': {},
+                    'collection_metadata': {
+                        'total_metrics_attempted': len(all_metrics_list),
+                        'successful_metrics': 0,
+                        'failed_metrics': 0,
+                        'total_data_points': 0,
+                        'collection_errors': []
+                    }
                 },
                 'container_insights': {
+                    'source_name': 'Container Insights',
+                    'source_type': 'log_analytics',
                     'status': 'pending',
-                    'queries_executed': [],
-                    'data_points': 0,
-                    'collection_errors': []
-                },
-                'kubernetes_api': {
-                    'status': 'not_available',
-                    'resources_discovered': [],
-                    'collection_errors': []
+                    'insights_data': {},
+                    'collection_metadata': {
+                        'queries_executed': 0,
+                        'successful_queries': 0,
+                        'failed_queries': 0,
+                        'total_data_points': 0,
+                        'collection_errors': []
+                    }
                 }
             },
-            
-            # ===== COLLECTION METADATA =====
-            'collection_metadata': {
-                'total_data_points': 0,
-                'successful_sources': 0,
-                'failed_sources': 0,
-                'data_freshness_score': 0.0,
+            'combined_analysis': {
                 'health_score': 0.0,
-                'total_metrics_attempted': len(all_metrics_list)
+                'data_consistency_score': 0.0,
+                'recommendations': [],
+                'cross_validation': {}
+            },
+            'collection_summary': {
+                'total_sources': 2,
+                'successful_sources': 0,
+                'total_metrics_collected': 0,
+                'total_data_points': 0,
+                'collection_duration_seconds': 0.0
             }
         }
         
-        # ===== COLLECT AZURE MONITOR METRICS =====
-        azure_source = comprehensive_metrics['data_sources']['azure_monitor']
+        collection_start = datetime.now(timezone.utc)
+        
+        # Collect Azure Monitor metrics
+        await self._collect_azure_monitor_metrics(
+            cluster_resource_id, all_metrics_list, start_time, end_time, comprehensive_metrics
+        )
+        
+        # Collect Container Insights data
+        if self._logs_client and self.log_analytics_workspace_id:
+            await self._collect_container_insights_data(
+                cluster_name, start_time, end_time, comprehensive_metrics
+            )
+        else:
+            ci_source = comprehensive_metrics['metrics_by_source']['container_insights']
+            ci_source['status'] = 'unavailable'
+            ci_source['collection_metadata']['collection_errors'].append(
+                'Log Analytics workspace not configured'
+            )
+        
+        # Perform combined analysis
+        self._perform_cross_source_analysis(comprehensive_metrics)
+        
+        # Calculate final summary
+        collection_end = datetime.now(timezone.utc)
+        collection_duration = (collection_end - collection_start).total_seconds()
+        
+        summary = comprehensive_metrics['collection_summary']
+        azure_source = comprehensive_metrics['metrics_by_source']['azure_monitor']
+        ci_source = comprehensive_metrics['metrics_by_source']['container_insights']
+        
+        summary.update({
+            'successful_sources': sum(1 for source in [azure_source, ci_source] if source['status'] == 'success'),
+            'total_metrics_collected': (
+                azure_source['collection_metadata']['successful_metrics'] +
+                ci_source['collection_metadata']['successful_queries']
+            ),
+            'total_data_points': (
+                azure_source['collection_metadata']['total_data_points'] +
+                ci_source['collection_metadata']['total_data_points']
+            ),
+            'collection_duration_seconds': collection_duration
+        })
+        
+        self.logger.info(
+            f"Comprehensive metrics collection completed for {cluster_name}",
+            successful_sources=summary['successful_sources'],
+            total_metrics=summary['total_metrics_collected'],
+            total_data_points=summary['total_data_points'],
+            duration_seconds=collection_duration
+        )
+        
+        return comprehensive_metrics
+    
+    async def _collect_azure_monitor_metrics(self, cluster_resource_id: str, all_metrics_list: List[str],
+                                           start_time: datetime, end_time: datetime,
+                                           comprehensive_metrics: Dict[str, Any]) -> None:
+        """Collect all Azure Monitor metrics with detailed tracking."""
+        azure_source = comprehensive_metrics['metrics_by_source']['azure_monitor']
+        metadata = azure_source['collection_metadata']
         
         try:
             self.logger.info(f"Collecting {len(all_metrics_list)} Azure Monitor metrics...")
             
             granularity = timedelta(minutes=5)
-            collected_metrics = {}
             
             for metric_name in all_metrics_list:
                 try:
-                    self.logger.debug(f"Attempting to collect metric: {metric_name}")
-                    metric_data = await self._get_single_metric_safe(
+                    self.logger.debug(f"Collecting metric: {metric_name}")
+                    metric_data = await self._get_single_metric_with_details(
                         cluster_resource_id, metric_name, start_time, end_time, granularity
                     )
                     
-                    if metric_data:
-                        # Debug: Check data types
-                        latest_val = self._get_latest_value(metric_data)
-                        avg_val = self._get_average_value(metric_data)
-                        max_val = self._get_max_value(metric_data)
+                    if metric_data and metric_data.get('raw_data'):
+                        azure_source['metrics'][metric_name] = metric_data
+                        metadata['successful_metrics'] += 1
+                        metadata['total_data_points'] += len(metric_data['raw_data'])
                         
-                        self.logger.debug(f"Metric {metric_name}: latest={latest_val} (type={type(latest_val)}), avg={avg_val} (type={type(avg_val)})")
-                        
-                        collected_metrics[metric_name] = {
-                            'latest_value': latest_val,
-                            'average_value': avg_val,
-                            'max_value': max_val,
-                            'data_points': len(metric_data),
-                            'raw_data': metric_data
-                        }
-                        azure_source['data_points'] += len(metric_data)
-                        azure_source['metrics_collected'].append(metric_name)
-                        self.logger.debug(f"✓ Collected {len(metric_data)} data points for {metric_name}")
+                        self.logger.debug(f"✓ Collected {len(metric_data['raw_data'])} data points for {metric_name}")
                     else:
+                        metadata['failed_metrics'] += 1
+                        metadata['collection_errors'].append(f"{metric_name}: No data available")
                         self.logger.debug(f"✗ No data for {metric_name}")
                         
                 except Exception as e:
+                    metadata['failed_metrics'] += 1
+                    metadata['collection_errors'].append(f"{metric_name}: {str(e)}")
                     self.logger.warning(f"Failed to collect {metric_name}: {e}")
-                    azure_source['collection_errors'].append(f"{metric_name}: {str(e)}")
                     continue
             
-            # Debug: Log collected metrics summary
-            self.logger.info(f"Collected metrics summary: {list(collected_metrics.keys())}")
+            azure_source['status'] = 'success' if metadata['successful_metrics'] > 0 else 'no_data'
             
-            # Organize metrics into groups
-            self._organize_collected_metrics(collected_metrics, comprehensive_metrics)
-            
-            azure_source['status'] = 'success' if azure_source['data_points'] > 0 else 'no_data'
-            self.logger.info(f"Azure Monitor: {len(azure_source['metrics_collected'])}/{len(all_metrics_list)} metrics collected, {azure_source['data_points']} data points")
+            self.logger.info(
+                f"Azure Monitor collection completed: {metadata['successful_metrics']}/{metadata['total_metrics_attempted']} metrics, "
+                f"{metadata['total_data_points']} data points"
+            )
             
         except Exception as e:
             azure_source['status'] = 'failed'
-            azure_source['collection_errors'].append(str(e))
+            metadata['collection_errors'].append(f"Collection failed: {str(e)}")
             self.logger.error(f"Azure Monitor collection failed: {e}")
-            import traceback
-            self.logger.error(f"Full traceback: {traceback.format_exc()}")
-        
-        # ===== COLLECT CONTAINER INSIGHTS =====
-        if self._logs_client and self.log_analytics_workspace_id:
-            await self._collect_container_insights_safe(cluster_name, start_time, end_time, comprehensive_metrics)
-        else:
-            comprehensive_metrics['data_sources']['container_insights']['status'] = 'unavailable'
-            comprehensive_metrics['data_sources']['container_insights']['collection_errors'].append(
-                'Log Analytics workspace not configured'
-            )
-        
-        # ===== COMBINED ANALYSIS =====
-        try:
-            self.logger.debug("Starting combined analysis...")
-            self._perform_combined_analysis(comprehensive_metrics)
-            self.logger.debug("Combined analysis completed")
-        except Exception as e:
-            self.logger.error(f"Combined analysis failed: {e}")
-            import traceback
-            self.logger.error(f"Combined analysis traceback: {traceback.format_exc()}")
-            # Set default combined analysis
-            comprehensive_metrics['combined_analysis'] = {
-                'cluster_health_score': 0.0,
-                'data_consistency_score': 0.0,
-                'recommendations': [f"Analysis failed: {str(e)}"],
-                'error': str(e)
-            }
-        
-        # ===== FINAL METADATA =====
-        self._calculate_final_metadata(comprehensive_metrics)
-        
-        total_data_points = comprehensive_metrics['collection_metadata']['total_data_points']
-        successful_sources = comprehensive_metrics['collection_metadata']['successful_sources']
-        
-        self.logger.info(
-            f"Fixed comprehensive metrics collection completed for {cluster_name}",
-            total_data_points=total_data_points,
-            successful_sources=successful_sources,
-            health_score=comprehensive_metrics['collection_metadata']['health_score']
-        )
-        
-        return comprehensive_metrics
     
-    def _organize_collected_metrics(self, collected_metrics: Dict[str, Any], 
-                                  comprehensive_metrics: Dict[str, Any]) -> None:
-        """Organize collected metrics into logical groups."""
-        
-        # Node Performance metrics
-        node_performance = {}
-        node_resource_allocation = {}
-        
-        for metric_name, metric_data in collected_metrics.items():
-            if metric_name.startswith('node_'):
-                node_performance[metric_name] = metric_data
-            elif metric_name.startswith('kube_node_'):
-                node_resource_allocation[metric_name] = metric_data
-        
-        if node_resource_allocation:
-            node_performance['resource_allocation'] = node_resource_allocation
-        
-        comprehensive_metrics['node_performance'] = node_performance
-        
-        # Control Plane metrics
-        control_plane = {}
-        autoscaler_metrics = {}
-        
-        for metric_name, metric_data in collected_metrics.items():
-            if metric_name.startswith(('apiserver_', 'etcd_')):
-                control_plane[metric_name] = metric_data
-            elif 'autoscaler' in metric_name:
-                autoscaler_metrics[metric_name] = metric_data
-        
-        if autoscaler_metrics:
-            control_plane['autoscaler_metrics'] = autoscaler_metrics
-        
-        comprehensive_metrics['control_plane_health'] = control_plane
-        
-        # Pod metrics
-        pod_metrics = {}
-        for metric_name, metric_data in collected_metrics.items():
-            if metric_name.startswith('kube_pod_'):
-                pod_metrics[metric_name] = metric_data
-        
-        if pod_metrics:
-            comprehensive_metrics['azure_pod_metrics'] = pod_metrics
-    
-    async def _collect_container_insights_safe(self, cluster_name: str,
-                                          start_time: datetime, end_time: datetime,
-                                          comprehensive_metrics: Dict[str, Any]) -> None:
-        """Fixed Container Insights collection with better queries."""
-        ci_source = comprehensive_metrics['data_sources']['container_insights']
+    async def _collect_container_insights_data(self, cluster_name: str,
+                                             start_time: datetime, end_time: datetime,
+                                             comprehensive_metrics: Dict[str, Any]) -> None:
+        """Collect Container Insights data with comprehensive queries."""
+        ci_source = comprehensive_metrics['metrics_by_source']['container_insights']
+        metadata = ci_source['collection_metadata']
         
         try:
-            self.logger.info("Collecting Container Insights metrics...")
+            self.logger.info("Collecting Container Insights data...")
             hours = int((end_time - start_time).total_seconds() / 3600)
             
-            # ===== FIX 1: CLUSTER OVERVIEW QUERY =====
-            cluster_overview_query = f"""
-            KubeNodeInventory
-            | where TimeGenerated >= ago({hours}h)
-            | where ClusterName == '{cluster_name}' or ClusterName has '{cluster_name}'
-            | summarize 
-                TotalNodes = dcount(Computer),
-                ReadyNodes = dcountif(Computer, Status == "Ready")
-            | extend NotReadyNodes = TotalNodes - ReadyNodes
-            | extend HealthPercentage = toreal(ReadyNodes) * 100.0 / toreal(TotalNodes)
-            """
-            
-            cluster_overview = await self._execute_log_query_safe(
-                cluster_overview_query, start_time, end_time, "cluster_overview"
-            )
-            
-            # Debug logging for cluster overview
-            self.logger.info(f"Raw cluster overview result: {cluster_overview}")
-            
-            if cluster_overview:
-                # Fix: Handle both list and dict results
-                if isinstance(cluster_overview, list) and len(cluster_overview) > 0:
-                    cluster_overview = cluster_overview[0]
-                
-                if isinstance(cluster_overview, dict) and cluster_overview:
-                    comprehensive_metrics['cluster_overview'] = cluster_overview
-                    ci_source['queries_executed'].append('cluster_overview')
-                    ci_source['data_points'] += 1
-                    self.logger.info(f"Cluster overview collected: {cluster_overview}")
-                else:
-                    self.logger.warning(f"Cluster overview invalid format: {cluster_overview}")
-            else:
-                self.logger.warning("No cluster overview data returned - trying alternative query")
-                
-                # Alternative query without cluster name filter
-                alt_cluster_query = f"""
-                KubeNodeInventory
-                | where TimeGenerated >= ago({hours}h)
-                | summarize 
-                    TotalNodes = dcount(Computer),
-                    ReadyNodes = dcountif(Computer, Status == "Ready")
-                | extend NotReadyNodes = TotalNodes - ReadyNodes
-                | extend HealthPercentage = toreal(ReadyNodes) * 100.0 / toreal(TotalNodes)
-                """
-                
-                alt_cluster = await self._execute_log_query_safe(
-                    alt_cluster_query, start_time, end_time, "alt_cluster_overview"
-                )
-                
-                if alt_cluster:
-                    if isinstance(alt_cluster, list) and len(alt_cluster) > 0:
-                        alt_cluster = alt_cluster[0]
-                    comprehensive_metrics['cluster_overview'] = alt_cluster
-                    ci_source['data_points'] += 1
-                    self.logger.info(f"Alternative cluster overview collected: {alt_cluster}")
-            
-            # ===== FIX 2: WORKLOAD DISTRIBUTION QUERY =====
-            # Try multiple approaches for workload data
-            workload_found = False
-            
-            # Approach 1: KubePodInventory cluster-wide
-            workload_cluster_query = f"""
-            KubePodInventory
-            | where TimeGenerated >= ago({hours}h)
-            | where ClusterName == '{cluster_name}' or ClusterName has '{cluster_name}'
-            | summarize 
-                TotalPods = dcount(Name),
-                RunningPods = dcountif(Name, PodStatus == "Running"),
-                PendingPods = dcountif(Name, PodStatus == "Pending"),
-                FailedPods = dcountif(Name, PodStatus == "Failed"),
-                SucceededPods = dcountif(Name, PodStatus == "Succeeded")
-            """
-            
-            workload_cluster = await self._execute_log_query_safe(
-                workload_cluster_query, start_time, end_time, "workload_cluster"
-            )
-            
-            # Debug logging for workload
-            self.logger.info(f"Raw workload cluster result: {workload_cluster}")
-            
-            if workload_cluster:
-                if isinstance(workload_cluster, list) and len(workload_cluster) > 0:
-                    workload_cluster = workload_cluster[0]
-                
-                if isinstance(workload_cluster, dict) and workload_cluster.get('TotalPods', 0) > 0:
-                    comprehensive_metrics['workload_distribution'] = workload_cluster
-                    ci_source['queries_executed'].append('workload_distribution_cluster')
-                    ci_source['data_points'] += 1
-                    workload_found = True
-                    self.logger.info(f"Workload distribution collected: {workload_cluster}")
-                    
-                    # Also get namespace breakdown
-                    namespace_query = f"""
+            # Define all Container Insights queries
+            insights_queries = {
+                'node_cpu_utilization': {
+                    'description': 'Node CPU Utilization %',
+                    'query': f"""
+                    Perf
+                    | where TimeGenerated >= ago({hours}h)
+                    | where ObjectName == "K8SNode"
+                    | where CounterName == "cpuUsageNanoCores"
+                    | summarize 
+                        AvgCPU = avg(CounterValue),
+                        MaxCPU = max(CounterValue),
+                        MinCPU = min(CounterValue),
+                        DataPoints = count()
+                    by Computer, bin(TimeGenerated, 5m)
+                    | summarize 
+                        OverallAvgCPU = avg(AvgCPU),
+                        OverallMaxCPU = max(MaxCPU),
+                        TotalDataPoints = sum(DataPoints)
+                    """
+                },
+                'node_memory_utilization': {
+                    'description': 'Node Memory Utilization %',
+                    'query': f"""
+                    Perf
+                    | where TimeGenerated >= ago({hours}h)
+                    | where ObjectName == "K8SNode"
+                    | where CounterName == "memoryWorkingSetBytes"
+                    | summarize 
+                        AvgMemory = avg(CounterValue),
+                        MaxMemory = max(CounterValue),
+                        MinMemory = min(CounterValue),
+                        DataPoints = count()
+                    by Computer, bin(TimeGenerated, 5m)
+                    | summarize 
+                        OverallAvgMemory = avg(AvgMemory),
+                        OverallMaxMemory = max(MaxMemory),
+                        TotalDataPoints = sum(DataPoints)
+                    """
+                },
+                'node_count_status': {
+                    'description': 'Node Count and Status',
+                    'query': f"""
+                    KubeNodeInventory
+                    | where TimeGenerated >= ago({hours}h)
+                    | summarize 
+                        TotalNodes = dcount(Computer),
+                        ReadyNodes = dcountif(Computer, Status == "Ready"),
+                        NotReadyNodes = dcountif(Computer, Status != "Ready")
+                    | extend HealthPercentage = case(TotalNodes > 0, toreal(ReadyNodes) * 100.0 / toreal(TotalNodes), 0.0)
+                    """
+                },
+                'pod_count_status': {
+                    'description': 'Pod Count and Status',
+                    'query': f"""
                     KubePodInventory
                     | where TimeGenerated >= ago({hours}h)
-                    | where ClusterName == '{cluster_name}' or ClusterName has '{cluster_name}'
+                    | summarize 
+                        TotalPods = dcount(Name),
+                        RunningPods = dcountif(Name, PodStatus == "Running"),
+                        PendingPods = dcountif(Name, PodStatus == "Pending"),
+                        FailedPods = dcountif(Name, PodStatus == "Failed"),
+                        SucceededPods = dcountif(Name, PodStatus == "Succeeded")
+                    | extend RunningPercentage = case(TotalPods > 0, toreal(RunningPods) * 100.0 / toreal(TotalPods), 0.0)
+                    """
+                },
+                'namespace_breakdown': {
+                    'description': 'Pod distribution by namespace',
+                    'query': f"""
+                    KubePodInventory
+                    | where TimeGenerated >= ago({hours}h)
                     | summarize 
                         TotalPods = dcount(Name),
                         RunningPods = dcountif(Name, PodStatus == "Running"),
@@ -445,107 +372,166 @@ class MonitorClient(BaseClient):
                     by Namespace
                     | order by TotalPods desc
                     """
+                },
+                'container_performance': {
+                    'description': 'Container CPU and Memory performance',
+                    'query': f"""
+                    Perf
+                    | where TimeGenerated >= ago({hours}h)
+                    | where ObjectName == "K8SContainer"
+                    | where CounterName in ("cpuUsageNanoCores", "memoryWorkingSetBytes")
+                    | summarize 
+                        AvgValue = avg(CounterValue),
+                        MaxValue = max(CounterValue),
+                        DataPoints = count()
+                    by CounterName, Computer, InstanceName
+                    | summarize 
+                        OverallAvgValue = avg(AvgValue),
+                        OverallMaxValue = max(MaxValue),
+                        TotalDataPoints = sum(DataPoints)
+                    by CounterName
+                    """
+                },
+                'node_capacity': {
+                    'description': 'Node capacity and allocatable resources',
+                    'query': f"""
+                    KubeNodeInventory
+                    | where TimeGenerated >= ago({hours}h)
+                    | summarize arg_max(TimeGenerated, *) by Computer
+                    | summarize 
+                        TotalCpuCores = sum(AllocatableCpuCores),
+                        TotalMemoryBytes = sum(AllocatableMemoryBytes),
+                        AvgCpuCores = avg(AllocatableCpuCores),
+                        AvgMemoryBytes = avg(AllocatableMemoryBytes),
+                        NodeCount = count()
+                    """
+                },
+                'container_restarts': {
+                    'description': 'Container restart information',
+                    'query': f"""
+                    KubePodInventory
+                    | where TimeGenerated >= ago({hours}h)
+                    | summarize 
+                        TotalRestarts = sum(RestartCount),
+                        AvgRestarts = avg(RestartCount),
+                        MaxRestarts = max(RestartCount),
+                        PodsWithRestarts = dcountif(Name, RestartCount > 0)
+                    """
+                }
+            }
+            
+            # Execute all queries
+            for query_name, query_info in insights_queries.items():
+                try:
+                    self.logger.debug(f"Executing Container Insights query: {query_name}")
                     
-                    namespace_breakdown = await self._execute_log_query_safe(
-                        namespace_query, start_time, end_time, "workload_namespaces"
+                    result = await self._execute_log_query_safe(
+                        query_info['query'], start_time, end_time, query_name
                     )
                     
-                    if namespace_breakdown and isinstance(namespace_breakdown, list):
-                        comprehensive_metrics['workload_distribution']['namespace_breakdown'] = namespace_breakdown
-                        ci_source['data_points'] += len(namespace_breakdown)
-                        self.logger.info(f"Namespace breakdown: {len(namespace_breakdown)} namespaces")
-            
-            # Approach 2: Try without cluster name filter if no results
-            if not workload_found:
-                self.logger.warning("No workload data with cluster filter - trying without filter")
-                
-                alt_workload_query = f"""
-                KubePodInventory
-                | where TimeGenerated >= ago({hours}h)
-                | summarize 
-                    TotalPods = dcount(Name),
-                    RunningPods = dcountif(Name, PodStatus == "Running"),
-                    PendingPods = dcountif(Name, PodStatus == "Pending"),
-                    FailedPods = dcountif(Name, PodStatus == "Failed"),
-                    SucceededPods = dcountif(Name, PodStatus == "Succeeded")
-                """
-                
-                alt_workload = await self._execute_log_query_safe(
-                    alt_workload_query, start_time, end_time, "alt_workload"
-                )
-                
-                self.logger.info(f"Alternative workload result: {alt_workload}")
-                
-                if alt_workload:
-                    if isinstance(alt_workload, list) and len(alt_workload) > 0:
-                        alt_workload = alt_workload[0]
-                    
-                    if isinstance(alt_workload, dict) and alt_workload.get('TotalPods', 0) > 0:
-                        comprehensive_metrics['workload_distribution'] = alt_workload
-                        ci_source['data_points'] += 1
-                        workload_found = True
-                        self.logger.info(f"Alternative workload collected: {alt_workload}")
-            
-            # Approach 3: Try ContainerInventory as last resort
-            if not workload_found:
-                self.logger.warning("Trying ContainerInventory as fallback")
-                
-                container_query = f"""
-                ContainerInventory
-                | where TimeGenerated >= ago({hours}h)
-                | summarize PodCount = dcount(PodName)
-                """
-                
-                container_result = await self._execute_log_query_safe(
-                    container_query, start_time, end_time, "container_fallback"
-                )
-                
-                self.logger.info(f"Container inventory result: {container_result}")
-                
-                if container_result:
-                    if isinstance(container_result, list) and len(container_result) > 0:
-                        container_result = container_result[0]
-                    
-                    pod_count = container_result.get('PodCount', 0) if isinstance(container_result, dict) else 0
-                    
-                    if pod_count > 0:
-                        comprehensive_metrics['workload_distribution'] = {
-                            'TotalPods': pod_count,
-                            'RunningPods': pod_count,  # Assume running
-                            'PendingPods': 0,
-                            'FailedPods': 0,
-                            'SucceededPods': 0,
-                            'source': 'container_inventory'
+                    if result:
+                        ci_source['insights_data'][query_name] = {
+                            'description': query_info['description'],
+                            'data': result,
+                            'query_executed': query_info['query'],
+                            'timestamp': datetime.now(timezone.utc).isoformat()
                         }
-                        ci_source['data_points'] += 1
-                        workload_found = True
-                        self.logger.info(f"Container inventory fallback: {pod_count} pods")
+                        
+                        metadata['successful_queries'] += 1
+                        
+                        # Count data points
+                        if isinstance(result, list):
+                            metadata['total_data_points'] += len(result)
+                        elif isinstance(result, dict):
+                            metadata['total_data_points'] += 1
+                        
+                        self.logger.debug(f"✓ Container Insights query '{query_name}' successful")
+                    else:
+                        metadata['failed_queries'] += 1
+                        metadata['collection_errors'].append(f"{query_name}: No data returned")
+                        self.logger.warning(f"✗ Container Insights query '{query_name}' returned no data")
+                    
+                    metadata['queries_executed'] += 1
+                    
+                except Exception as e:
+                    metadata['failed_queries'] += 1
+                    metadata['queries_executed'] += 1
+                    metadata['collection_errors'].append(f"{query_name}: {str(e)}")
+                    self.logger.error(f"Container Insights query '{query_name}' failed: {e}")
             
-            # If still no workload data, create minimal structure
-            if not workload_found:
-                self.logger.warning("No workload data found from any source")
-                comprehensive_metrics['workload_distribution'] = {
-                    'TotalPods': 0,
-                    'RunningPods': 0,
-                    'PendingPods': 0,
-                    'FailedPods': 0,
-                    'SucceededPods': 0,
-                    'source': 'no_data'
-                }
+            ci_source['status'] = 'success' if metadata['successful_queries'] > 0 else 'no_data'
             
-            ci_source['status'] = 'success' if ci_source['data_points'] > 0 else 'no_data'
-            self.logger.info(f"Container Insights: {ci_source['data_points']} data points collected")
+            self.logger.info(
+                f"Container Insights collection completed: {metadata['successful_queries']}/{metadata['queries_executed']} queries successful, "
+                f"{metadata['total_data_points']} data points"
+            )
             
         except Exception as e:
             ci_source['status'] = 'failed'
-            ci_source['collection_errors'].append(str(e))
+            metadata['collection_errors'].append(f"Collection failed: {str(e)}")
             self.logger.error(f"Container Insights collection failed: {e}")
-            import traceback
-            self.logger.error(f"Container Insights traceback: {traceback.format_exc()}")
-
+    
+    async def _get_single_metric_with_details(self, resource_id: str, metric_name: str,
+                                            start_time: datetime, end_time: datetime,
+                                            granularity: timedelta) -> Optional[Dict[str, Any]]:
+        """Get detailed metric data with metadata."""
+        try:
+            response = self._metrics_client.query_resource(
+                resource_uri=resource_id,
+                metric_names=[metric_name],
+                timespan=(start_time, end_time),
+                granularity=granularity,
+                aggregations=[MetricAggregationType.AVERAGE, MetricAggregationType.MAXIMUM, MetricAggregationType.MINIMUM]
+            )
+            
+            raw_data = []
+            for metric in response.metrics:
+                for timeseries in metric.timeseries:
+                    for data_point in timeseries.data:
+                        if any([data_point.average, data_point.maximum, data_point.minimum]):
+                            raw_data.append({
+                                'timestamp': data_point.timestamp.isoformat() if data_point.timestamp else None,
+                                'average': float(data_point.average) if data_point.average is not None else None,
+                                'maximum': float(data_point.maximum) if data_point.maximum is not None else None,
+                                'minimum': float(data_point.minimum) if data_point.minimum is not None else None,
+                                'metric_name': metric_name
+                            })
+            
+            if raw_data:
+                # Calculate aggregated values
+                valid_averages = [point['average'] for point in raw_data if point['average'] is not None]
+                valid_maximums = [point['maximum'] for point in raw_data if point['maximum'] is not None]
+                valid_minimums = [point['minimum'] for point in raw_data if point['minimum'] is not None]
+                
+                return {
+                    'metric_name': metric_name,
+                    'collection_timestamp': datetime.now(timezone.utc).isoformat(),
+                    'data_points_count': len(raw_data),
+                    'aggregated_values': {
+                        'latest_average': valid_averages[-1] if valid_averages else None,
+                        'latest_maximum': valid_maximums[-1] if valid_maximums else None,
+                        'latest_minimum': valid_minimums[-1] if valid_minimums else None,
+                        'overall_average': sum(valid_averages) / len(valid_averages) if valid_averages else None,
+                        'overall_maximum': max(valid_maximums) if valid_maximums else None,
+                        'overall_minimum': min(valid_minimums) if valid_minimums else None
+                    },
+                    'raw_data': raw_data,
+                    'time_range': {
+                        'start_time': start_time.isoformat(),
+                        'end_time': end_time.isoformat(),
+                        'granularity_minutes': granularity.total_seconds() / 60
+                    }
+                }
+            
+            return None
+            
+        except Exception as e:
+            self.logger.debug(f"Failed to get metric {metric_name}: {e}")
+            return None
+    
     async def _execute_log_query_safe(self, query: str, start_time: datetime, 
-                                    end_time: datetime, query_name: str) -> Optional[Dict[str, Any]]:
-        """Safely execute a Log Analytics query with robust column handling."""
+                                    end_time: datetime, query_name: str) -> Optional[Any]:
+        """Execute Log Analytics query safely."""
         try:
             self.logger.debug(f"Executing {query_name} query")
             
@@ -555,261 +541,87 @@ class MonitorClient(BaseClient):
                 timespan=(start_time, end_time)
             )
             
-            if response and hasattr(response, 'tables') and response.tables:
-                table = response.tables[0]
-                if table.rows:
-                    # Robust column handling
-                    columns = []
-                    for col in table.columns:
-                        try:
-                            if hasattr(col, 'name'):
-                                columns.append(col.name)
-                            elif hasattr(col, 'column_name'):
-                                columns.append(col.column_name)
-                            elif isinstance(col, dict) and 'name' in col:
-                                columns.append(col['name'])
-                            elif isinstance(col, str):
-                                columns.append(col)
-                            else:
-                                columns.append(f"column_{len(columns)}")
-                        except Exception as col_error:
-                            self.logger.warning(f"Error processing column {col}: {col_error}")
-                            columns.append(f"column_{len(columns)}")
-                    
-                    if len(table.rows) == 1:
-                        # Single row result
-                        row = table.rows[0]
-                        return dict(zip(columns, row))
-                    else:
-                        # Multiple rows result
-                        results = []
-                        for row in table.rows:
-                            results.append(dict(zip(columns, row)))
-                        return results
-                        
-            return None
+            if not response or not hasattr(response, 'tables') or not response.tables:
+                return None
+                
+            table = response.tables[0]
+            if not table.rows:
+                return None
             
+            # Get column names
+            columns = []
+            if hasattr(table, 'columns') and table.columns:
+                for col in table.columns:
+                    if hasattr(col, 'name'):
+                        columns.append(col.name)
+                    elif hasattr(col, 'column_name'):
+                        columns.append(col.column_name)
+                    else:
+                        columns.append(f"column_{len(columns)}")
+            else:
+                columns = [f"column_{i}" for i in range(len(table.rows[0]))]
+            
+            if len(table.rows) == 1:
+                return dict(zip(columns, table.rows[0]))
+            else:
+                return [dict(zip(columns, row)) for row in table.rows]
+                
         except Exception as e:
             self.logger.error(f"Failed to execute {query_name} query: {e}")
             return None
     
-    async def _get_single_metric_safe(self, resource_id: str, metric_name: str,
-                                    start_time: datetime, end_time: datetime,
-                                    granularity: timedelta) -> List[Dict[str, Any]]:
-        """Safely get data for a single metric."""
-        try:
-            response = self._metrics_client.query_resource(
-                resource_uri=resource_id,
-                metric_names=[metric_name],
-                timespan=(start_time, end_time),
-                granularity=granularity,
-                aggregations=[MetricAggregationType.AVERAGE, MetricAggregationType.MAXIMUM]
-            )
-            
-            metric_data = []
-            for metric in response.metrics:
-                for timeseries in metric.timeseries:
-                    for data_point in timeseries.data:
-                        if data_point.average is not None or data_point.maximum is not None:
-                            metric_data.append({
-                                'timestamp': data_point.timestamp.isoformat() if data_point.timestamp else None,
-                                'average': float(data_point.average) if data_point.average is not None else None,
-                                'maximum': float(data_point.maximum) if data_point.maximum is not None else None,
-                                'metric_name': metric_name
-                            })
-            
-            return metric_data
-            
-        except Exception as e:
-            self.logger.debug(f"Failed to get metric {metric_name}: {e}")
-            return []
-    
-    def _get_latest_value(self, metric_data: List[Dict[str, Any]]) -> Optional[float]:
-        """Get latest value from metric data with safe type handling."""
-        if not metric_data:
-            return None
-        try:
-            latest = metric_data[-1]
-            value = latest.get('average') or latest.get('maximum')
-            return self._safe_float_conversion(value)
-        except Exception as e:
-            self.logger.debug(f"Error getting latest value: {e}")
-            return None
-    
-    def _get_average_value(self, metric_data: List[Dict[str, Any]]) -> Optional[float]:
-        """Get average value from metric data with safe type handling."""
-        if not metric_data:
-            return None
-        try:
-            values = []
-            for point in metric_data:
-                val = point.get('average', 0) or point.get('maximum', 0)
-                converted_val = self._safe_float_conversion(val)
-                if converted_val > 0:  # Only include positive values
-                    values.append(converted_val)
-            
-            return sum(values) / len(values) if values else None
-        except Exception as e:
-            self.logger.debug(f"Error calculating average: {e}")
-            return None
-    
-    def _get_max_value(self, metric_data: List[Dict[str, Any]]) -> Optional[float]:
-        """Get max value from metric data with safe type handling."""
-        if not metric_data:
-            return None
-        try:
-            values = []
-            for point in metric_data:
-                val = point.get('maximum', 0) or point.get('average', 0)
-                converted_val = self._safe_float_conversion(val)
-                if converted_val > 0:  # Only include positive values
-                    values.append(converted_val)
-            
-            return max(values) if values else None
-        except Exception as e:
-            self.logger.debug(f"Error getting max value: {e}")
-            return None
-    
-    def _perform_combined_analysis(self, comprehensive_metrics: Dict[str, Any]) -> None:
-        """Perform cross-source validation and health scoring."""
-        combined_analysis = {
-            'data_source_validation': {},
-            'health_indicators': {},
-            'cluster_health_score': 0.0,
-            'data_consistency_score': 0.0,
-            'recommendations': []
-        }
+    def _perform_cross_source_analysis(self, comprehensive_metrics: Dict[str, Any]) -> None:
+        """Perform analysis across different data sources."""
+        azure_source = comprehensive_metrics['metrics_by_source']['azure_monitor']
+        ci_source = comprehensive_metrics['metrics_by_source']['container_insights']
+        analysis = comprehensive_metrics['combined_analysis']
         
-        # Data source validation
-        azure_status = comprehensive_metrics['data_sources']['azure_monitor']['status']
-        ci_status = comprehensive_metrics['data_sources']['container_insights']['status']
+        # Calculate health score
+        health_factors = []
         
-        combined_analysis['data_source_validation'] = {
-            'azure_monitor_available': azure_status == 'success',
-            'container_insights_available': ci_status == 'success',
-            'primary_source': 'azure_monitor' if azure_status == 'success' else 'container_insights',
-            'data_coverage_percentage': self._calculate_data_coverage(comprehensive_metrics)
-        }
+        # Azure Monitor health contribution
+        if azure_source['status'] == 'success':
+            azure_health = (azure_source['collection_metadata']['successful_metrics'] / 
+                          azure_source['collection_metadata']['total_metrics_attempted']) * 100
+            health_factors.append(azure_health)
         
-        # Health indicators
-        health_indicators = {}
+        # Container Insights health contribution
+        if ci_source['status'] == 'success':
+            ci_health = 100.0 if ci_source['collection_metadata']['successful_queries'] > 5 else 50.0
+            health_factors.append(ci_health)
         
-        # Node health
-        if comprehensive_metrics['node_performance']:
-            cpu_health = self._assess_cpu_health(comprehensive_metrics['node_performance'])
-            memory_health = self._assess_memory_health(comprehensive_metrics['node_performance'])
-            health_indicators.update({
-                'cpu_health': cpu_health,
-                'memory_health': memory_health
-            })
+        analysis['health_score'] = sum(health_factors) / len(health_factors) if health_factors else 0.0
         
-        # Cluster health
-        if comprehensive_metrics['cluster_overview']:
-            cluster_health = self._assess_cluster_health(comprehensive_metrics['cluster_overview'])
-            health_indicators.update(cluster_health)
+        # Data consistency score
+        successful_sources = sum(1 for source in [azure_source, ci_source] if source['status'] == 'success')
+        analysis['data_consistency_score'] = (successful_sources / 2) * 100
         
-        combined_analysis['health_indicators'] = health_indicators
-        combined_analysis['cluster_health_score'] = self._calculate_cluster_health_score(health_indicators)
-        combined_analysis['data_consistency_score'] = self._calculate_data_consistency_score(comprehensive_metrics)
-        combined_analysis['recommendations'] = self._generate_recommendations(comprehensive_metrics, health_indicators)
+        # Generate recommendations
+        recommendations = []
+        if azure_source['status'] != 'success':
+            recommendations.append("Azure Monitor metrics collection failed - check permissions and cluster configuration")
+        if ci_source['status'] != 'success':
+            recommendations.append("Container Insights data collection failed - verify Log Analytics workspace configuration")
+        if analysis['health_score'] < 50:
+            recommendations.append("Low metrics collection success rate - review monitoring configuration")
         
-        comprehensive_metrics['combined_analysis'] = combined_analysis
-    
-    def _calculate_final_metadata(self, comprehensive_metrics: Dict[str, Any]) -> None:
-        """Calculate final collection metadata."""
-        metadata = comprehensive_metrics['collection_metadata']
+        analysis['recommendations'] = recommendations
         
-        successful_sources = 0
-        total_data_points = 0
+        # Cross-validation between sources
+        cross_validation = {}
         
-        for source_name, source_data in comprehensive_metrics['data_sources'].items():
-            if source_data['status'] == 'success':
-                successful_sources += 1
-            total_data_points += source_data.get('data_points', 0)
+        # Compare node counts if available from both sources
+        azure_node_metrics = [name for name in azure_source.get('metrics', {}).keys() if 'node_' in name]
+        ci_node_data = ci_source.get('insights_data', {}).get('node_count_status', {})
         
-        metadata.update({
-            'total_data_points': total_data_points,
-            'successful_sources': successful_sources,
-            'failed_sources': len(comprehensive_metrics['data_sources']) - successful_sources,
-            'data_freshness_score': self._calculate_freshness_score(comprehensive_metrics),
-            'health_score': comprehensive_metrics['combined_analysis']['cluster_health_score']
-        })
-    
-    # Helper methods for analysis
-    def _calculate_data_coverage(self, comprehensive_metrics: Dict[str, Any]) -> float:
-        """Calculate data coverage percentage."""
-        total_sources = len(comprehensive_metrics['data_sources'])
-        successful_sources = sum(
-            1 for source in comprehensive_metrics['data_sources'].values()
-            if source['status'] == 'success'
-        )
-        return (successful_sources / total_sources) * 100 if total_sources > 0 else 0
-    
-    def _assess_cpu_health(self, node_performance: Dict[str, Any]) -> Dict[str, Any]:
-        """Assess CPU health from node performance data with safe type checking."""
-        cpu_metric = node_performance.get('node_cpu_usage_percentage', {})
-        
-        # Safe value extraction with type checking
-        latest_cpu = self._safe_float_conversion(cpu_metric.get('latest_value', 0))
-        avg_cpu = self._safe_float_conversion(cpu_metric.get('average_value', 0))
-        
-        status = 'healthy'
-        if avg_cpu > 80:
-            status = 'critical'
-        elif avg_cpu > 60:
-            status = 'warning'
-        
-        return {
-            'status': status,
-            'latest_usage': latest_cpu,
-            'average_usage': avg_cpu,
-            'trend': 'stable'
-        }
-    
-    def _assess_memory_health(self, node_performance: Dict[str, Any]) -> Dict[str, Any]:
-        """Assess memory health from node performance data with safe type checking."""
-        memory_metric = node_performance.get('node_memory_working_set_percentage', {})
-        
-        # Safe value extraction with type checking
-        latest_memory = self._safe_float_conversion(memory_metric.get('latest_value', 0))
-        avg_memory = self._safe_float_conversion(memory_metric.get('average_value', 0))
-        
-        status = 'healthy'
-        if avg_memory > 85:
-            status = 'critical'
-        elif avg_memory > 70:
-            status = 'warning'
-        
-        return {
-            'status': status,
-            'latest_usage': latest_memory,
-            'average_usage': avg_memory,
-            'trend': 'stable'
-        }
-    
-    def _assess_cluster_health(self, cluster_overview: Dict[str, Any]) -> Dict[str, Any]:
-        """Assess cluster health from overview data with safe type checking."""
-        if isinstance(cluster_overview, dict):
-            total_nodes = self._safe_int_conversion(cluster_overview.get('TotalNodes', 0))
-            ready_nodes = self._safe_int_conversion(cluster_overview.get('ReadyNodes', 0))
-            health_percentage = self._safe_float_conversion(cluster_overview.get('HealthPercentage', 0))
-        else:
-            total_nodes = ready_nodes = health_percentage = 0
-        
-        status = 'healthy'
-        if health_percentage < 80:
-            status = 'critical'
-        elif health_percentage < 95:
-            status = 'warning'
-        
-        return {
-            'cluster_node_health': {
-                'status': status,
-                'total_nodes': total_nodes,
-                'ready_nodes': ready_nodes,
-                'health_percentage': health_percentage
+        if azure_node_metrics and ci_node_data:
+            cross_validation['node_data_availability'] = {
+                'azure_monitor_node_metrics': len(azure_node_metrics),
+                'container_insights_node_data': bool(ci_node_data.get('data')),
+                'consistency_check': 'available_from_both_sources'
             }
-        }
+        
+        analysis['cross_validation'] = cross_validation
     
     def _safe_float_conversion(self, value) -> float:
         """Safely convert value to float."""
@@ -829,61 +641,36 @@ class MonitorClient(BaseClient):
         except (ValueError, TypeError):
             return 0
     
-    def _calculate_cluster_health_score(self, health_indicators: Dict[str, Any]) -> float:
-        """Calculate overall cluster health score."""
-        scores = []
-        
-        for indicator_name, indicator_data in health_indicators.items():
-            if isinstance(indicator_data, dict) and 'status' in indicator_data:
-                status = indicator_data['status']
-                if status == 'healthy':
-                    scores.append(100)
-                elif status == 'warning':
-                    scores.append(70)
-                elif status == 'critical':
-                    scores.append(30)
-        
-        return sum(scores) / len(scores) if scores else 0.0
-    
-    def _calculate_data_consistency_score(self, comprehensive_metrics: Dict[str, Any]) -> float:
-        """Calculate data consistency score across sources."""
-        successful_sources = comprehensive_metrics['collection_metadata']['successful_sources']
-        total_sources = len(comprehensive_metrics['data_sources'])
-        
-        return (successful_sources / total_sources) * 100 if total_sources > 0 else 0
-    
-    def _calculate_freshness_score(self, comprehensive_metrics: Dict[str, Any]) -> float:
-        """Calculate data freshness score."""
-        total_data_points = comprehensive_metrics['collection_metadata']['total_data_points']
-        
-        if total_data_points == 0:
-            return 0.0
-        elif total_data_points < 10:
-            return 30.0
-        elif total_data_points < 50:
-            return 70.0
+    def _get_resource_status(self, value: float, thresholds: List[float]) -> str:
+        """Get resource status based on value and thresholds."""
+        if value == 0.0:
+            return "unknown"
+        elif value < thresholds[0]:
+            return "healthy"
+        elif value < thresholds[1]:
+            return "warning"
         else:
-            return 100.0
+            return "critical"
     
-    def _generate_recommendations(self, comprehensive_metrics: Dict[str, Any], 
-                                health_indicators: Dict[str, Any]) -> List[str]:
-        """Generate recommendations based on metrics and health indicators."""
-        recommendations = []
+    def _estimate_vm_resources(self, vm_size: str) -> tuple:
+        """Estimate vCores and memory for VM size."""
+        if not isinstance(vm_size, str):
+            vm_size = ""
+            
+        # Azure VM size mappings
+        vm_specs = {
+            "Standard_B2s": (2, 4),
+            "Standard_B4ms": (4, 16),
+            "Standard_D2s_v3": (2, 8),
+            "Standard_D4s_v3": (4, 16),
+            "Standard_D8s_v3": (8, 32),
+            "Standard_D16s_v3": (16, 64),
+            "Standard_E2s_v3": (2, 16),
+            "Standard_E4s_v3": (4, 32),
+            "Standard_E8s_v3": (8, 64),
+            "Standard_F2s_v2": (2, 4),
+            "Standard_F4s_v2": (4, 8),
+            "Standard_F8s_v2": (8, 16)
+        }
         
-        # Check metrics collection
-        successful_sources = comprehensive_metrics['collection_metadata']['successful_sources']
-        if successful_sources == 0:
-            recommendations.append("No metrics data available. Check Azure Monitor permissions and Log Analytics configuration.")
-        elif successful_sources == 1:
-            recommendations.append("Limited metrics data. Consider enabling additional monitoring sources for comprehensive visibility.")
-        
-        # Check health indicators
-        for indicator_name, indicator_data in health_indicators.items():
-            if isinstance(indicator_data, dict) and 'status' in indicator_data:
-                status = indicator_data['status']
-                if status == 'critical':
-                    recommendations.append(f"Critical: {indicator_name} requires immediate attention.")
-                elif status == 'warning':
-                    recommendations.append(f"Warning: {indicator_name} should be monitored closely.")
-        
-        return recommendations
+        return vm_specs.get(vm_size, (2, 8))  # Default to 2 cores, 8GB
