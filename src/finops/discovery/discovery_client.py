@@ -107,8 +107,8 @@ class DiscoveryClient(BaseClient):
         }
         
         try:
-            # Collect raw cost data
-            discovery_data["raw_cost_data"] = await self._collect_raw_cost_data()
+            # # Collect raw cost data
+            # discovery_data["raw_cost_data"] = await self._collect_raw_cost_data()
             
             # Discover clusters
             clusters = await self.aks_client.discover_clusters(self.resource_group)

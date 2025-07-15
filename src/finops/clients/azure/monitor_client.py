@@ -367,7 +367,9 @@ class MonitorClient(BaseClient):
                 
                 'namespace_resource_attribution': f"""
                     KubePodInventory
-                    | where TimeGenerated >= ago({time_ranges['discovery']}h)
+                    | where TimeGenerated >= ago(24h)
+                    | where isnotempty(Name) and isnotempty(Namespace) and column_ifexists("Node", "") != ""
+                    | extend Node = column_ifexists("Node", "")
                     | summarize 
                         total_pods = dcount(Name),
                         running_pods = dcountif(Name, PodStatus == "Running"),
@@ -376,6 +378,10 @@ class MonitorClient(BaseClient):
                         by Namespace, bin(TimeGenerated, 1h)
                     | extend namespace_efficiency = case(total_pods > 0, (running_pods * 100.0) / total_pods, 0.0)
                     | order by TimeGenerated desc, Namespace | take 400
+
+
+
+                    
                 """,
                 
                 'namespace_summary': f"""
@@ -393,8 +399,10 @@ class MonitorClient(BaseClient):
                 
                 'workload_attribution': f"""
                     KubePodInventory
-                    | where TimeGenerated >= ago({time_ranges['discovery']}h)
+                    | where TimeGenerated >= ago(24h)
+                    | where isnotempty(ControllerName) and isnotempty(ControllerKind)
                     | extend WorkloadType = ControllerKind, WorkloadName = ControllerName
+                    | extend RestartCount = toint(column_ifexists("RestartCount", 0))
                     | summarize 
                         pod_count = count(),
                         running_pods = countif(PodStatus == "Running"),
@@ -402,6 +410,9 @@ class MonitorClient(BaseClient):
                         by WorkloadType, WorkloadName, bin(TimeGenerated, 2h)
                     | extend workload_health = case(pod_count > 0, (running_pods * 100.0) / pod_count, 0.0)
                     | order by TimeGenerated desc, WorkloadType | take 300
+
+
+
                 """
             },
             
@@ -474,9 +485,9 @@ class MonitorClient(BaseClient):
                 
                 'persistent_volume_claim_metrics': f"""
                     InsightsMetrics
-                    | where TimeGenerated >= ago({time_ranges['storage']}h)
-                    | where Namespace == "container.azm.ms/pv"
+                    | where TimeGenerated >= ago(6h)
                     | where Name in ("used_bytes", "capacity_bytes")
+                    | where typeof(Tags) == 'dynamic' and Tags has "volume"
                     | extend PVName = tostring(Tags["volume"])
                     | summarize 
                         used_bytes = avgif(todouble(Val), Name == "used_bytes"),
@@ -488,9 +499,9 @@ class MonitorClient(BaseClient):
                 
                 'pod_network_traffic': f"""
                     InsightsMetrics
-                    | where TimeGenerated >= ago({time_ranges['network']}h)
-                    | where Namespace == "container.azm.ms/network"
+                    | where TimeGenerated >= ago(6h)
                     | where Name in ("rx_bytes", "tx_bytes")
+                    | where typeof(Tags) == "dynamic" and Tags has "pod"
                     | extend PodName = tostring(Tags["pod"])
                     | summarize 
                         rx_bytes = avgif(todouble(Val), Name == "rx_bytes"),
@@ -502,9 +513,9 @@ class MonitorClient(BaseClient):
                 
                 'pod_network_connectivity': f"""
                     InsightsMetrics
-                    | where TimeGenerated >= ago({time_ranges['network']}h)
-                    | where Namespace == "container.azm.ms/network"
+                    | where TimeGenerated >= ago(6h)
                     | where Name in ("rx_packets", "rx_dropped")
+                    | where typeof(Tags) == "dynamic" and Tags has "pod"
                     | extend PodName = tostring(Tags["pod"])
                     | summarize 
                         rx_packets = avgif(todouble(Val), Name == "rx_packets"),
