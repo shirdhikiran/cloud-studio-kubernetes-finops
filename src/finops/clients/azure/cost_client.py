@@ -123,7 +123,7 @@ class CostClient(BaseClient):
                 timeframe=TimeframeType.CUSTOM,
                 time_period=QueryTimePeriod(from_property=start_date, to=end_date),
                 dataset=QueryDataset(
-                    granularity=GranularityType.NONE,
+                    granularity=GranularityType.DAILY,
                     aggregation={
                         "totalCost": QueryAggregation(name="PreTaxCost", function="Sum"),
                         "usageQuantity": QueryAggregation(name="UsageQuantity", function="Sum")
@@ -259,6 +259,7 @@ class CostClient(BaseClient):
             return detailed_costs
         
         for row in response.rows:
+            import pdb; pdb.set_trace()
             try:
                 if len(row) >= 6:
                     cost = float(row[0]) if row[0] is not None else 0.0

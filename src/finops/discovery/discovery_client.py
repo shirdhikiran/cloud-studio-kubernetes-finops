@@ -4,7 +4,7 @@
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 import structlog
-
+import traceback
 from finops.clients.azure.aks_client import AKSClient
 from finops.clients.azure.cost_client import CostClient
 from finops.clients.azure.monitor_client import MonitorClient
@@ -95,7 +95,7 @@ class DiscoveryClient(BaseClient):
                 "metrics_hours": self.metrics_hours,
                 "discovery_version": "1.0.0"
             },
-            "raw_cost_data": {},
+            "resource_group_cost_data": {},
             "clusters": [],
             "summary": {
                 "total_clusters": 0,
@@ -107,8 +107,8 @@ class DiscoveryClient(BaseClient):
         }
         
         try:
-            # # Collect raw cost data
-            # discovery_data["raw_cost_data"] = await self._collect_raw_cost_data()
+            # Collect raw cost data
+            discovery_data["resource_group_cost_data"] = await self._collect_resource_group_cost_data()
             
             # Discover clusters
             clusters = await self.aks_client.discover_clusters(self.resource_group)
@@ -124,7 +124,7 @@ class DiscoveryClient(BaseClient):
                 discovery_data["summary"]["total_pods"] += cluster_data.get("pod_count", 0)
             
             # Set total cost from raw cost data
-            raw_costs = discovery_data["raw_cost_data"]
+            raw_costs = discovery_data["resource_group_cost_data"]
             discovery_data["summary"]["total_cost"] = raw_costs.get("total_cost", 0.0)
             
             self.logger.info(
@@ -152,7 +152,7 @@ class DiscoveryClient(BaseClient):
             "node_pools": [],
             "kubernetes_resources": {},
             "raw_metrics": {},
-            "detailed_costs": {},
+            "node_resource_group_costs": {},
             "node_count": 0,
             "pod_count": 0,
             "collection_status": "in_progress"
@@ -183,14 +183,22 @@ class DiscoveryClient(BaseClient):
             
             # Collect detailed cost data for this cluster
             try:
-                detailed_costs = await self.cost_client.get_detailed_resource_costs(
-                    resource_group, self.cost_analysis_days
-                )
-                cluster_data["detailed_costs"] = detailed_costs if detailed_costs else {}
+                node_rg_name = cluster.get("node_resource_group")
+                if node_rg_name:
+                    node_resource_group_costs = await self.cost_client.get_resource_group_costs(
+                    node_rg_name, self.cost_analysis_days
+                    )
+                    
+                    cluster_data["node_resource_group_costs"] = node_resource_group_costs if node_resource_group_costs else {}
+                else:
+                    cluster_data["node_resource_group_costs"] = {"error": "Node resource group not found"}
+                    
+                
                 
             except Exception as e:
-                self.logger.error(f"Detailed cost collection failed for {cluster_name}: {e}")
-                cluster_data["detailed_costs"] = {"error": str(e)}
+                
+                self.logger.error(f"node_resource_group_costs cost collection failed for {cluster_name}: {e}")
+                cluster_data["node_resource_group_costs"] = {"error": str(e)}
             
             # Collect Kubernetes resources data
             if self.k8s_client:
@@ -225,7 +233,7 @@ class DiscoveryClient(BaseClient):
         
         return cluster_data
     
-    async def _collect_raw_cost_data(self) -> Dict[str, Any]:
+    async def _collect_resource_group_cost_data(self) -> Dict[str, Any]:
         """Collect raw cost data without any processing."""
         default_cost_structure = {
             "total_cost": 0.0,

@@ -19,6 +19,13 @@ class DiscoveryException(FinOpsException):
         self.discovery_type = discovery_type
         super().__init__(f"Discovery failed for {discovery_type}: {message}", details)
 
+class AnalyticsException(FinOpsException):
+    """Raised when discovery operations fail."""
+    
+    def __init__(self, analytics_type: str, message: str, details: Optional[Dict[str, Any]] = None):
+        self.discovery_type = analytics_type
+        super().__init__(f"Analytics failed for {analytics_type}: {message}", details)
+
 
 class ClientConnectionException(FinOpsException):
     """Raised when client connections fail."""
