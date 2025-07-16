@@ -145,7 +145,8 @@ class CostClient(BaseClient):
             return {"error": str(e), "resources": {}}
     
     def _process_cost_response(self, response, resource_group: str, start_date: datetime, end_date: datetime) -> Dict[str, Any]:
-        """Process cost API response into structured format."""
+        """Process cost API response into structured format with daily breakdown."""
+        
         costs = {
             'resource_group': resource_group,
             'period': {
@@ -158,12 +159,16 @@ class CostClient(BaseClient):
             'by_resource_type': {},
             'by_meter_category': {},
             'by_resource_id': {},
+            'daily_breakdown': [],
             'currency': 'USD'
         }
         
         if not hasattr(response, 'rows') or not response.rows:
             self.logger.warning("No cost data returned")
             return costs
+        
+        # Track daily costs for aggregation with resource details
+        daily_costs = {}
         
         for row in response.rows:
             try:
@@ -177,6 +182,73 @@ class CostClient(BaseClient):
                     resource_id = row[6] if len(row) > 6 and row[6] is not None else "Unknown"
                     
                     costs['total_cost'] += cost
+                    
+                    # Process daily breakdown with resource details
+                    if usage_date_raw:
+                        parsed_date = self._parse_usage_date(usage_date_raw)
+                        if parsed_date:
+                            date_key = parsed_date.strftime('%Y-%m-%d')
+                            
+                            if date_key not in daily_costs:
+                                daily_costs[date_key] = {
+                                    'date': date_key,
+                                    'cost': 0.0,
+                                    'usage_quantity': 0.0,
+                                    'currency': 'USD',
+                                    'resources': {},
+                                    'services': {},
+                                    'resource_types': {},
+                                    'meter_categories': {}
+                                }
+                            
+                            # Aggregate daily totals
+                            daily_costs[date_key]['cost'] += cost
+                            daily_costs[date_key]['usage_quantity'] += usage_quantity
+                            
+                            # Resource-level breakdown for the day
+                            if resource_id != "Unknown":
+                                if resource_id not in daily_costs[date_key]['resources']:
+                                    daily_costs[date_key]['resources'][resource_id] = {
+                                        'resource_id': resource_id,
+                                        'resource_type': resource_type,
+                                        'service_name': service_name,
+                                        'meter_category': meter_category,
+                                        'cost': 0.0,
+                                        'usage_quantity': 0.0,
+                                        'currency': 'USD'
+                                    }
+                                daily_costs[date_key]['resources'][resource_id]['cost'] += cost
+                                daily_costs[date_key]['resources'][resource_id]['usage_quantity'] += usage_quantity
+                            
+                            # Service-level breakdown for the day
+                            if service_name not in daily_costs[date_key]['services']:
+                                daily_costs[date_key]['services'][service_name] = {
+                                    'cost': 0.0,
+                                    'usage_quantity': 0.0,
+                                    'currency': 'USD'
+                                }
+                            daily_costs[date_key]['services'][service_name]['cost'] += cost
+                            daily_costs[date_key]['services'][service_name]['usage_quantity'] += usage_quantity
+                            
+                            # Resource type breakdown for the day
+                            if resource_type not in daily_costs[date_key]['resource_types']:
+                                daily_costs[date_key]['resource_types'][resource_type] = {
+                                    'cost': 0.0,
+                                    'usage_quantity': 0.0,
+                                    'currency': 'USD'
+                                }
+                            daily_costs[date_key]['resource_types'][resource_type]['cost'] += cost
+                            daily_costs[date_key]['resource_types'][resource_type]['usage_quantity'] += usage_quantity
+                            
+                            # Meter category breakdown for the day
+                            if meter_category not in daily_costs[date_key]['meter_categories']:
+                                daily_costs[date_key]['meter_categories'][meter_category] = {
+                                    'cost': 0.0,
+                                    'usage_quantity': 0.0,
+                                    'currency': 'USD'
+                                }
+                            daily_costs[date_key]['meter_categories'][meter_category]['cost'] += cost
+                            daily_costs[date_key]['meter_categories'][meter_category]['usage_quantity'] += usage_quantity
                     
                     # Group by service
                     if service_name not in costs['by_service']:
@@ -212,83 +284,143 @@ class CostClient(BaseClient):
                         costs['by_resource_id'][resource_id]['cost'] += cost
                         costs['by_resource_id'][resource_id]['usage_quantity'] += usage_quantity
                     
-                    
             except (ValueError, TypeError, IndexError) as e:
                 self.logger.warning(f"Error processing cost row: {e}")
                 continue
         
-       
+        # Convert daily_costs dict to sorted list for daily_breakdown
+        costs['daily_breakdown'] = sorted(daily_costs.values(), key=lambda x: x['date'])
+        
+        # Add summary statistics for daily breakdown
+        if costs['daily_breakdown']:
+            costs['daily_summary'] = {
+                'total_days': len(costs['daily_breakdown']),
+                'avg_daily_cost': costs['total_cost'] / len(costs['daily_breakdown']),
+                'max_daily_cost': max(day['cost'] for day in costs['daily_breakdown']),
+                'min_daily_cost': min(day['cost'] for day in costs['daily_breakdown']),
+                'cost_volatility': self._calculate_cost_volatility(costs['daily_breakdown'])
+            }
         
         self.logger.info(
             f"Processed cost data for {resource_group}",
             total_cost=costs['total_cost'],
             services=len(costs['by_service']),
-            resources=len(costs['by_resource_id'])
+            resources=len(costs['by_resource_id']),
+            daily_entries=len(costs['daily_breakdown'])
         )
         
         return costs
-    
-    def _process_detailed_resource_costs(self, response, resource_group: str) -> Dict[str, Any]:
-        """Process detailed resource costs."""
-        detailed_costs = {
-            'resource_group': resource_group,
-            'resources': {},
-            'summary': {
-                'total_resources': 0,
-                'total_cost': 0.0,
-                'currency': 'USD'
+
+    def _calculate_cost_volatility(self, daily_breakdown: List[Dict[str, Any]]) -> float:
+        """Calculate cost volatility (standard deviation of daily costs)."""
+        if len(daily_breakdown) < 2:
+            return 0.0
+        
+        costs = [day['cost'] for day in daily_breakdown]
+        mean_cost = sum(costs) / len(costs)
+        variance = sum((cost - mean_cost) ** 2 for cost in costs) / len(costs)
+        return variance ** 0.5
+
+    def get_daily_cost_drivers(self, daily_breakdown: List[Dict[str, Any]], top_n: int = 5) -> Dict[str, Any]:
+        """Get top cost drivers for each day from daily breakdown."""
+        daily_drivers = {}
+        
+        for day in daily_breakdown:
+            date = day['date']
+            daily_drivers[date] = {
+                'date': date,
+                'total_cost': day['cost'],
+                'top_resources': [],
+                'top_services': [],
+                'top_resource_types': []
             }
-        }
+            
+            # Top resources by cost
+            if 'resources' in day:
+                sorted_resources = sorted(
+                    day['resources'].items(),
+                    key=lambda x: x[1]['cost'],
+                    reverse=True
+                )[:top_n]
+                
+                daily_drivers[date]['top_resources'] = [
+                    {
+                        'resource_id': res_id,
+                        'cost': res_data['cost'],
+                        'percentage': (res_data['cost'] / day['cost']) * 100 if day['cost'] > 0 else 0,
+                        'resource_type': res_data['resource_type'],
+                        'service_name': res_data['service_name']
+                    }
+                    for res_id, res_data in sorted_resources
+                ]
+            
+            # Top services by cost
+            if 'services' in day:
+                sorted_services = sorted(
+                    day['services'].items(),
+                    key=lambda x: x[1]['cost'],
+                    reverse=True
+                )[:top_n]
+                
+                daily_drivers[date]['top_services'] = [
+                    {
+                        'service_name': svc_name,
+                        'cost': svc_data['cost'],
+                        'percentage': (svc_data['cost'] / day['cost']) * 100 if day['cost'] > 0 else 0
+                    }
+                    for svc_name, svc_data in sorted_services
+                ]
+            
+            # Top resource types by cost
+            if 'resource_types' in day:
+                sorted_types = sorted(
+                    day['resource_types'].items(),
+                    key=lambda x: x[1]['cost'],
+                    reverse=True
+                )[:top_n]
+                
+                daily_drivers[date]['top_resource_types'] = [
+                    {
+                        'resource_type': type_name,
+                        'cost': type_data['cost'],
+                        'percentage': (type_data['cost'] / day['cost']) * 100 if day['cost'] > 0 else 0
+                    }
+                    for type_name, type_data in sorted_types
+                ]
         
-        if not hasattr(response, 'rows') or not response.rows:
-            return detailed_costs
-        
-        for row in response.rows:
-            import pdb; pdb.set_trace()
-            try:
-                if len(row) >= 6:
-                    cost = float(row[0]) if row[0] is not None else 0.0
-                    usage_quantity = float(row[1]) if row[1] is not None else 0.0
-                    resource_id = row[2] if row[2] is not None else "Unknown"
-                    resource_type = row[3] if row[3] is not None else "Unknown"
-                    service_name = row[4] if row[4] is not None else "Unknown"
-                    meter_category = row[5] if row[5] is not None else "Unknown"
-                    
-                    if resource_id not in detailed_costs['resources']:
-                        detailed_costs['resources'][resource_id] = {
-                            'resource_id': resource_id,
-                            'resource_type': resource_type,
-                            'service_name': service_name,
-                            'total_cost': 0.0,
-                            'total_usage': 0.0,
-                            'currency': 'USD'
-                        }
-                    
-                    detailed_costs['resources'][resource_id]['total_cost'] += cost
-                    detailed_costs['resources'][resource_id]['total_usage'] += usage_quantity
-                    detailed_costs['summary']['total_cost'] += cost
-                    
-            except (ValueError, TypeError, IndexError) as e:
-                self.logger.warning(f"Error processing detailed cost row: {e}")
-                continue
-        
-        detailed_costs['summary']['total_resources'] = len(detailed_costs['resources'])
-        return detailed_costs
-    
+        return daily_drivers
+
     def _parse_usage_date(self, usage_date_raw) -> Optional[datetime]:
         """Parse usage date from various formats."""
         if not usage_date_raw:
             return None
         
         try:
+            # Handle integer/float date formats (e.g., 20250716)
             if isinstance(usage_date_raw, (int, float)):
                 date_str = str(int(usage_date_raw))
                 if len(date_str) == 8:
                     year, month, day = int(date_str[:4]), int(date_str[4:6]), int(date_str[6:8])
                     return datetime(year, month, day)
-            elif isinstance(usage_date_raw, str) and len(usage_date_raw) == 8:
-                return datetime.strptime(usage_date_raw, '%Y%m%d')
-            else:
-                return usage_date_raw if hasattr(usage_date_raw, 'strftime') else None
-        except (ValueError, TypeError):
+            
+            # Handle string date formats
+            elif isinstance(usage_date_raw, str):
+                # Try YYYYMMDD format
+                if len(usage_date_raw) == 8 and usage_date_raw.isdigit():
+                    return datetime.strptime(usage_date_raw, '%Y%m%d')
+                # Try ISO format
+                elif 'T' in usage_date_raw:
+                    return datetime.fromisoformat(usage_date_raw.replace('Z', '+00:00'))
+                # Try date-only format
+                elif '-' in usage_date_raw:
+                    return datetime.strptime(usage_date_raw.split('T')[0], '%Y-%m-%d')
+            
+            # Handle datetime objects
+            elif hasattr(usage_date_raw, 'strftime'):
+                return usage_date_raw
+            
+            return None
+            
+        except (ValueError, TypeError) as e:
+            self.logger.warning(f"Failed to parse usage date: {usage_date_raw}, error: {e}")
             return None
