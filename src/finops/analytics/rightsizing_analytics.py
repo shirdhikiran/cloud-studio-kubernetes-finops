@@ -1,48 +1,43 @@
 # src/finops/analytics/rightsizing_analytics.py
 """
-Right-sizing Analytics Module - Intelligent resource sizing recommendations
+Enhanced Phase 2 Rightsizing Analytics with node_resource_group_costs integration
 """
-
-from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime, timezone
-import structlog
-import statistics
+import traceback
+import asyncio
+from typing import Dict, Any, List, Optional
+from datetime import datetime, timedelta
 from collections import defaultdict
-import math
+import structlog
 
 logger = structlog.get_logger(__name__)
 
 
 class RightsizingAnalytics:
-    """Advanced right-sizing analytics for optimal resource allocation"""
+    """Enhanced Rightsizing Analytics for Phase 2"""
     
     def __init__(self, config: Dict[str, Any]):
         self.config = config
-        self.logger = logger.bind(module="rightsizing_analytics")
+        self.logger = logger.bind(analytics="rightsizing")
         
-        # Right-sizing parameters
-        self.parameters = {
-            'cpu_target_utilization': config.get('cpu_target_utilization', 70.0),  # %
-            'memory_target_utilization': config.get('memory_target_utilization', 70.0),  # %
-            'safety_buffer': config.get('safety_buffer', 20.0),  # % buffer above usage
-            'min_cpu_millicores': config.get('min_cpu_millicores', 100),
-            'min_memory_mb': config.get('min_memory_mb', 128),
-            'confidence_threshold': config.get('confidence_threshold', 7),  # days of data
+        self.thresholds = {
+            'cpu_utilization_target': config.get('cpu_target_utilization', 70.0),
+            'memory_utilization_target': config.get('memory_target_utilization', 70.0),
+            'over_provisioning_threshold': config.get('overprovisioning_threshold', 200.0),
+            'under_utilization_threshold': config.get('low_utilization_threshold', 30.0),
+            'min_confidence_threshold': config.get('min_confidence_threshold', 70.0)
         }
     
     async def analyze_cluster_rightsizing(self, cluster_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Comprehensive right-sizing analysis for a cluster"""
+        """Enhanced rightsizing analysis with cost correlation"""
         
-        cluster_info = cluster_data.get("cluster_info", {})
-        cluster_name = cluster_info.get("name", "unknown")
-        
-        self.logger.info(f"Starting right-sizing analysis for cluster: {cluster_name}")
+        cluster_name = cluster_data.get("cluster_info", {}).get("name", "unknown")
+
         
         analysis = {
             "cluster_name": cluster_name,
-            "analysis_timestamp": datetime.now(timezone.utc).isoformat(),
+            "analysis_timestamp": datetime.now().isoformat(),
+            "node_pool_rightsizing": {},
             "pod_rightsizing": {},
-            "node_rightsizing": {},
             "workload_rightsizing": {},
             "optimization_opportunities": [],
             "scaling_recommendations": [],
@@ -53,439 +48,628 @@ class RightsizingAnalytics:
         }
         
         try:
-            # 1. Pod-level right-sizing analysis
-            analysis["pod_rightsizing"] = await self._analyze_pod_rightsizing(cluster_data)
+            node_rg_costs = cluster_data.get("node_resource_group_costs", {})
+            raw_metrics = cluster_data.get("raw_metrics", {})
             
-            # 2. Node-level right-sizing analysis
-            analysis["node_rightsizing"] = await self._analyze_node_rightsizing(cluster_data)
-            
-            # 3. Workload-level right-sizing analysis
-            analysis["workload_rightsizing"] = await self._analyze_workload_rightsizing(cluster_data)
-            
-            # 4. Generate optimization opportunities
-            analysis["optimization_opportunities"] = await self._generate_optimization_opportunities(analysis)
-            
-            # 5. Generate scaling recommendations
-            analysis["scaling_recommendations"] = await self._generate_scaling_recommendations(analysis)
-            
-            # 6. Create resource recommendations
-            analysis["resource_recommendations"] = await self._create_resource_recommendations(analysis)
-            
-            # 7. Calculate cost impact
-            analysis["cost_impact"] = await self._calculate_rightsizing_cost_impact(analysis)
-            
-            # 8. Create implementation plan
-            analysis["implementation_plan"] = await self._create_implementation_plan(analysis)
-            
-            # 9. Calculate confidence scores
-            analysis["confidence_scores"] = await self._calculate_confidence_scores(analysis, cluster_data)
-            
-            self.logger.info(
-                f"Right-sizing analysis completed for {cluster_name}",
-                optimization_opportunities=len(analysis["optimization_opportunities"]),
-                potential_savings=analysis["cost_impact"].get("total_potential_savings", 0)
-            )
-            
+            if "error" not in node_rg_costs:
+                # 1. Node pool rightsizing analysis
+                analysis["node_pool_rightsizing"] = await self._analyze_node_pool_rightsizing(
+                    cluster_data, raw_metrics, node_rg_costs
+                )
+                
+                # 2. Pod-level rightsizing analysis
+                analysis["pod_rightsizing"] = await self._analyze_pod_rightsizing(
+                    cluster_data, raw_metrics, node_rg_costs
+                )
+                
+                # 3. Workload rightsizing analysis
+                analysis["workload_rightsizing"] = await self._analyze_workload_rightsizing(
+                    cluster_data, raw_metrics, node_rg_costs
+                )
+                
+                # 4. Generate optimization opportunities
+                analysis["optimization_opportunities"] = await self._generate_optimization_opportunities(
+                    analysis, node_rg_costs
+                )
+                
+                # 5. Generate scaling recommendations
+                analysis["scaling_recommendations"] = await self._generate_scaling_recommendations(
+                    analysis, node_rg_costs
+                )
+                
+                # 6. Create resource recommendations
+                analysis["resource_recommendations"] = await self._create_resource_recommendations(
+                    analysis, node_rg_costs
+                )
+                
+                # 7. Calculate cost impact
+                analysis["cost_impact"] = await self._calculate_rightsizing_cost_impact(
+                    analysis, node_rg_costs
+                )
+                
+                # 8. Create implementation plan
+                analysis["implementation_plan"] = await self._create_implementation_plan(
+                    analysis, node_rg_costs
+                )
+                
+                # 9. Calculate confidence scores
+                analysis["confidence_scores"] = await self._calculate_confidence_scores(analysis)
+                
+                self.logger.info(f"Rightsizing analysis completed for {cluster_name}")
+            else:
+                self.logger.warning(f"Skipping rightsizing analysis for {cluster_name} - no cost data")
+                analysis["error"] = "No valid cost data available"
+                
         except Exception as e:
-            self.logger.error(f"Right-sizing analysis failed for {cluster_name}: {e}")
+            import pdb; pdb.set_trace()
+            self.logger.error(f"Rightsizing analysis failed for {cluster_name}: {e}")
             analysis["error"] = str(e)
         
         return analysis
     
-    async def _analyze_pod_rightsizing(self, cluster_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Analyze pod-level right-sizing opportunities"""
+    async def _analyze_node_pool_rightsizing(self, cluster_data: Dict[str, Any], 
+                                          raw_metrics: Dict[str, Any], 
+                                          node_rg_costs: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze node pool rightsizing opportunities"""
         
-        pod_analysis = {
-            "pod_recommendations": [],
-            "resource_efficiency": {},
-            "right_sizing_potential": {},
-            "cpu_recommendations": {},
-            "memory_recommendations": {}
+        node_pool_analysis = {
+            "current_configuration": {},
+            "recommended_configuration": {},
+            "rightsizing_opportunities": [],
+            "potential_savings": 0.0
         }
         
-        # Extract pod utilization data
-        raw_metrics = cluster_data.get("raw_metrics", {})
-        container_insights = raw_metrics.get("container_insights_data", {})
-        
-        # Collect pod usage patterns
-        pod_usage_data = defaultdict(lambda: {
-            "cpu_usage": [],
-            "memory_usage": [],
-            "cpu_requests": 0,
-            "memory_requests": 0,
-            "cpu_limits": 0,
-            "memory_limits": 0
-        })
-        
-        # Gather CPU usage data
-        if "pod_cpu_usage" in container_insights:
-            cpu_data = container_insights["pod_cpu_usage"]
-            for point in cpu_data.get("data_points", []):
-                pod_name = point.get("PodName", "unknown")
-                cpu_usage = self.safe_float(point.get("cpu_usage_millicores", 0))
-                if cpu_usage > 0:
-                    pod_usage_data[pod_name]["cpu_usage"].append(cpu_usage)
-        
-        # Gather memory usage data
-        if "pod_memory_usage" in container_insights:
-            memory_data = container_insights["pod_memory_usage"]
-            for point in memory_data.get("data_points", []):
-                pod_name = point.get("PodName", "unknown")
-                memory_usage = self.safe_float(point.get("memory_usage_mb", 0))
-                if memory_usage > 0:
-                    pod_usage_data[pod_name]["memory_usage"].append(memory_usage)
-        
-        # Gather resource requests and limits
-        if "pod_resource_requests_limits" in container_insights:
-            request_data = container_insights["pod_resource_requests_limits"]
-            for point in request_data.get("data_points", []):
-                pod_name = point.get("PodName", "unknown")
-                if pod_name in pod_usage_data:
-                    pod_usage_data[pod_name]["cpu_requests"] = self.safe_float(point.get("cpu_request_millicores", 0))
-                    pod_usage_data[pod_name]["memory_requests"] = self.safe_float(point.get("memory_request_mb", 0))
-                    pod_usage_data[pod_name]["cpu_limits"] = self.safe_float(point.get("cpu_limit", 0))
-                    pod_usage_data[pod_name]["memory_limits"] = self.safe_float(point.get("memory_limit", 0))
-        
-        # Analyze each pod for right-sizing opportunities
-        for pod_name, usage_data in pod_usage_data.items():
-            cpu_usage = usage_data["cpu_usage"]
-            memory_usage = usage_data["memory_usage"]
-            
-            if len(cpu_usage) >= 3 and len(memory_usage) >= 3:  # Minimum data points
-                recommendation = self._generate_pod_recommendation(
-                    pod_name, usage_data, cpu_usage, memory_usage
-                )
-                
-                if recommendation:
-                    pod_analysis["pod_recommendations"].append(recommendation)
-        
-        # Calculate overall efficiency
-        if pod_analysis["pod_recommendations"]:
-            total_pods = len(pod_usage_data)
-            pods_needing_rightsizing = len(pod_analysis["pod_recommendations"])
-            
-            pod_analysis["resource_efficiency"] = {
-                "total_pods_analyzed": total_pods,
-                "pods_needing_rightsizing": pods_needing_rightsizing,
-                "rightsizing_percentage": (pods_needing_rightsizing / total_pods) * 100 if total_pods > 0 else 0,
-                "avg_cpu_over_provisioning": self._calculate_avg_overprovisioning(pod_analysis["pod_recommendations"], "cpu"),
-                "avg_memory_over_provisioning": self._calculate_avg_overprovisioning(pod_analysis["pod_recommendations"], "memory")
-            }
-        
-        return pod_analysis
-    
-    async def _analyze_node_rightsizing(self, cluster_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Analyze node-level right-sizing opportunities"""
-        
-        node_analysis = {
-            "node_recommendations": [],
-            "node_pool_optimization": [],
-            "cluster_capacity_optimization": {},
-            "node_efficiency_scores": {}
-        }
-        
-        # Get node pool information
         node_pools = cluster_data.get("node_pools", [])
+        total_cost = node_rg_costs.get("total_cost", 0.0)
         
-        # Extract node utilization data
-        raw_metrics = cluster_data.get("raw_metrics", {})
+        # Get utilization data
         container_insights = raw_metrics.get("container_insights_data", {})
         
-        # Collect node utilization patterns
-        node_utilization = defaultdict(lambda: {"cpu": [], "memory": []})
+        cpu_utilization = 0.0
+        memory_utilization = 0.0
         
-        if "aks_node_cpu_performance" in container_insights:
-            cpu_data = container_insights["aks_node_cpu_performance"]
-            for point in cpu_data.get("data_points", []):
-                node_name = point.get("NodeName", "unknown")
-                cpu_percent = self.safe_float(point.get("cpu_usage_millicores", 0)) / 20  # Convert to percentage
-                node_utilization[node_name]["cpu"].append(min(100, cpu_percent))
+        if "cluster_cpu_utilization" in container_insights:
+            cpu_data = container_insights["cluster_cpu_utilization"]
+            data_points = cpu_data.get("data_points", [])
+            if data_points:
+                cpu_values = [point.get("cpu_utilization_percentage", 0) for point in data_points]
+                cpu_utilization = sum(cpu_values) / len(cpu_values)
         
-        if "aks_node_memory_performance" in container_insights:
-            memory_data = container_insights["aks_node_memory_performance"]
-            for point in memory_data.get("data_points", []):
-                node_name = point.get("NodeName", "unknown")
-                memory_percent = self.safe_float(point.get("memory_usage_percentage", 0))
-                node_utilization[node_name]["memory"].append(min(100, memory_percent))
+        if "cluster_memory_utilization" in container_insights:
+            memory_data = container_insights["cluster_memory_utilization"]
+            data_points = memory_data.get("data_points", [])
+            if data_points:
+                memory_values = [point.get("memory_utilization_percentage", 0) for point in data_points]
+                memory_utilization = sum(memory_values) / len(memory_values)
         
         # Analyze each node pool
         for pool in node_pools:
             pool_name = pool.get("name", "unknown")
             vm_size = pool.get("vm_size", "")
-            node_count = pool.get("count", 0)
-            auto_scaling = pool.get("auto_scaling_enabled", False)
-            min_count = pool.get("min_count", 0)
-            max_count = pool.get("max_count", 0)
+            current_count = pool.get("count", 0)
+            min_count = pool.get("min_count", 1)
+            max_count = pool.get("max_count", current_count)
             
-            # Calculate pool utilization
-            pool_nodes = [name for name in node_utilization.keys() if pool_name.lower() in name.lower()]
+            # Get VM specifications
+            cpu_cores, memory_gb = self._parse_vm_size(vm_size)
             
-            if pool_nodes:
-                pool_cpu_usage = []
-                pool_memory_usage = []
+            # Calculate pool cost
+            pool_cost = total_cost * (current_count / max(sum(p.get("count", 0) for p in node_pools), 1))
+            
+            node_pool_analysis["current_configuration"][pool_name] = {
+                "vm_size": vm_size,
+                "current_count": current_count,
+                "min_count": min_count,
+                "max_count": max_count,
+                "cpu_cores_per_node": cpu_cores,
+                "memory_gb_per_node": memory_gb,
+                "total_cpu_cores": cpu_cores * current_count,
+                "total_memory_gb": memory_gb * current_count,
+                "estimated_monthly_cost": pool_cost
+            }
+            
+            # Rightsizing recommendations
+            rightsizing_opportunity = {}
+            
+            # Check for underutilization
+            if cpu_utilization < self.thresholds['under_utilization_threshold'] and memory_utilization < self.thresholds['under_utilization_threshold']:
+                # Recommend scaling down
+                recommended_count = max(min_count, int(current_count * 0.7))  # 30% reduction
+                cost_savings = pool_cost * (current_count - recommended_count) / current_count
                 
-                for node_name in pool_nodes:
-                    pool_cpu_usage.extend(node_utilization[node_name]["cpu"])
-                    pool_memory_usage.extend(node_utilization[node_name]["memory"])
+                rightsizing_opportunity = {
+                    "type": "scale_down",
+                    "current_count": current_count,
+                    "recommended_count": recommended_count,
+                    "reduction": current_count - recommended_count,
+                    "cost_savings": cost_savings,
+                    "confidence": 85.0,
+                    "rationale": f"Low utilization: CPU {cpu_utilization:.1f}%, Memory {memory_utilization:.1f}%"
+                }
+            
+            # Check for right-sizing VM type
+            elif cpu_utilization > 80 or memory_utilization > 80:
+                # Recommend scaling up or changing VM size
+                if current_count < max_count:
+                    recommended_count = min(max_count, int(current_count * 1.3))  # 30% increase
+                    additional_cost = pool_cost * (recommended_count - current_count) / current_count
+                    
+                    rightsizing_opportunity = {
+                        "type": "scale_up",
+                        "current_count": current_count,
+                        "recommended_count": recommended_count,
+                        "increase": recommended_count - current_count,
+                        "additional_cost": additional_cost,
+                        "confidence": 75.0,
+                        "rationale": f"High utilization: CPU {cpu_utilization:.1f}%, Memory {memory_utilization:.1f}%"
+                    }
+                else:
+                    # Recommend larger VM size
+                    recommended_vm_size = self._get_next_vm_size(vm_size)
+                    if recommended_vm_size:
+                        rightsizing_opportunity = {
+                            "type": "vm_size_upgrade",
+                            "current_vm_size": vm_size,
+                            "recommended_vm_size": recommended_vm_size,
+                            "confidence": 70.0,
+                            "rationale": f"High utilization and max node count reached"
+                        }
+            
+             # Check for VM size optimization
+            else:
+                # Check if we can use smaller VM size
+                target_cpu_cores = int((cpu_cores * current_count) * (cpu_utilization / 100) / self.thresholds['cpu_utilization_target'] * 100)
+                target_memory_gb = int((memory_gb * current_count) * (memory_utilization / 100) / self.thresholds['memory_utilization_target'] * 100)
                 
-                if pool_cpu_usage and pool_memory_usage:
-                    avg_cpu = statistics.mean(pool_cpu_usage)
-                    avg_memory = statistics.mean(pool_memory_usage)
-                    peak_cpu = max(pool_cpu_usage)
-                    peak_memory = max(pool_memory_usage)
-                    
-                    # Generate node pool recommendation
-                    recommendation = self._generate_node_pool_recommendation(
-                        pool, avg_cpu, avg_memory, peak_cpu, peak_memory
-                    )
-                    
-                    if recommendation:
-                        node_analysis["node_pool_optimization"].append(recommendation)
+                smaller_vm_size = self._find_optimal_vm_size(target_cpu_cores / current_count, target_memory_gb / current_count)
+                if smaller_vm_size and smaller_vm_size != vm_size:
+                    cost_savings = pool_cost * 0.2  # Estimate 20% savings
+                    rightsizing_opportunity = {
+                        "type": "vm_size_optimization",
+                        "current_vm_size": vm_size,
+                        "recommended_vm_size": smaller_vm_size,
+                        "potential_savings": cost_savings,
+                        "confidence": 60.0,
+                        "rationale": f"Current utilization allows for smaller VM size"
+                    }
+            
+            if rightsizing_opportunity:
+                rightsizing_opportunity["pool_name"] = pool_name
+                node_pool_analysis["rightsizing_opportunities"].append(rightsizing_opportunity)
+                
+                # Add to recommended configuration
+                node_pool_analysis["recommended_configuration"][pool_name] = rightsizing_opportunity
+                
+                # Add to potential savings
+                node_pool_analysis["potential_savings"] += rightsizing_opportunity.get("cost_savings", 0.0)
         
-        return node_analysis
+        return node_pool_analysis
     
-    async def _analyze_workload_rightsizing(self, cluster_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Analyze workload-level right-sizing opportunities"""
+    async def _analyze_pod_rightsizing(self, cluster_data: Dict[str, Any], 
+                                     raw_metrics: Dict[str, Any], 
+                                     node_rg_costs: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze pod-level rightsizing opportunities"""
         
-        workload_analysis = {
-            "deployment_recommendations": [],
-            "workload_scaling_analysis": {},
-            "resource_allocation_optimization": {}
+        pod_analysis = {
+            "total_pods": 0,
+            "overprovisioned_pods": [],
+            "underprovisioned_pods": [],
+            "resource_efficiency": {
+                "avg_cpu_utilization": 0.0,
+                "avg_memory_utilization": 0.0,
+                "avg_cpu_over_provisioning": 0.0,
+                "avg_memory_over_provisioning": 0.0
+            },
+            "rightsizing_recommendations": [],
+            "potential_savings": 0.0
         }
         
-        # Get Kubernetes workloads
+        k8s_resources = cluster_data.get("kubernetes_resources", {})
+        pods = k8s_resources.get("pods", [])
+        pod_analysis["total_pods"] = len(pods)
+        
+        if not pods:
+            return pod_analysis
+        
+        total_cost = node_rg_costs.get("total_cost", 0.0)
+        cost_per_pod = total_cost / len(pods) if pods else 0.0
+        
+        cpu_utilizations = []
+        memory_utilizations = []
+        cpu_over_provisioning = []
+        memory_over_provisioning = []
+        
+        for pod in pods:
+            pod_name = pod.get("name", "unknown")
+            namespace = pod.get("namespace", "unknown")
+            
+            # Get resource requests and limits
+            resource_requests = pod.get("resource_requests", {})
+            resource_limits = pod.get("resource_limits", {})
+            
+            cpu_request = resource_requests.get("cpu", 0)
+            memory_request = resource_requests.get("memory", 0)
+            cpu_limit = resource_limits.get("cpu", 0)
+            memory_limit = resource_limits.get("memory", 0)
+            
+            # Get utilization data (would need more detailed metrics)
+            # For now, simulate based on cluster-level utilization
+            container_insights = raw_metrics.get("container_insights_data", {})
+            
+            # Estimate pod utilization based on cluster utilization
+            cluster_cpu_util = 50.0  # Default
+            cluster_memory_util = 50.0  # Default
+            
+            if "cluster_cpu_utilization" in container_insights:
+                cpu_data = container_insights["cluster_cpu_utilization"]
+                data_points = cpu_data.get("data_points", [])
+                if data_points:
+                    cpu_values = [point.get("cpu_utilization_percentage", 0) for point in data_points]
+                    cluster_cpu_util = sum(cpu_values) / len(cpu_values)
+            
+            if "cluster_memory_utilization" in container_insights:
+                memory_data = container_insights["cluster_memory_utilization"]
+                data_points = memory_data.get("data_points", [])
+                if data_points:
+                    memory_values = [point.get("memory_utilization_percentage", 0) for point in data_points]
+                    cluster_memory_util = sum(memory_values) / len(memory_values)
+            
+            # Use cluster utilization as proxy for pod utilization
+            pod_cpu_util = cluster_cpu_util
+            pod_memory_util = cluster_memory_util
+            
+            cpu_utilizations.append(pod_cpu_util)
+            memory_utilizations.append(pod_memory_util)
+            cpu_over_prov = 0
+            memory_over_prov = 0
+            # Calculate over-provisioning
+            if cpu_request > 0:
+                cpu_over_prov = max(0, (cpu_request - pod_cpu_util) / cpu_request * 100)
+                cpu_over_provisioning.append(cpu_over_prov)
+            
+            if memory_request > 0:
+                memory_over_prov = max(0, (memory_request - pod_memory_util) / memory_request * 100)
+                memory_over_provisioning.append(memory_over_prov)
+            
+            # Identify overprovisioned pods
+            if cpu_over_prov > self.thresholds['over_provisioning_threshold'] or memory_over_prov > self.thresholds['over_provisioning_threshold']:
+                savings = cost_per_pod * 0.3  # Estimate 30% savings
+                
+                pod_analysis["overprovisioned_pods"].append({
+                    "name": pod_name,
+                    "namespace": namespace,
+                    "cpu_over_provisioning": cpu_over_prov,
+                    "memory_over_provisioning": memory_over_prov,
+                    "current_cpu_request": cpu_request,
+                    "current_memory_request": memory_request,
+                    "recommended_cpu_request": cpu_request * 0.7,  # 30% reduction
+                    "recommended_memory_request": memory_request * 0.7,  # 30% reduction
+                    "potential_savings": savings
+                })
+            
+            # Identify underprovisioned pods
+            elif pod_cpu_util > 85 or pod_memory_util > 85:
+                pod_analysis["underprovisioned_pods"].append({
+                    "name": pod_name,
+                    "namespace": namespace,
+                    "cpu_utilization": pod_cpu_util,
+                    "memory_utilization": pod_memory_util,
+                    "current_cpu_request": cpu_request,
+                    "current_memory_request": memory_request,
+                    "recommended_cpu_request": cpu_request * 1.3,  # 30% increase
+                    "recommended_memory_request": memory_request * 1.3,  # 30% increase
+                    "risk": "performance degradation"
+                })
+        
+        # Calculate resource efficiency
+        if cpu_utilizations:
+            pod_analysis["resource_efficiency"]["avg_cpu_utilization"] = sum(cpu_utilizations) / len(cpu_utilizations)
+        
+        if memory_utilizations:
+            pod_analysis["resource_efficiency"]["avg_memory_utilization"] = sum(memory_utilizations) / len(memory_utilizations)
+        
+        if cpu_over_provisioning:
+            pod_analysis["resource_efficiency"]["avg_cpu_over_provisioning"] = sum(cpu_over_provisioning) / len(cpu_over_provisioning)
+        
+        if memory_over_provisioning:
+            pod_analysis["resource_efficiency"]["avg_memory_over_provisioning"] = sum(memory_over_provisioning) / len(memory_over_provisioning)
+        
+        # Calculate potential savings
+        pod_analysis["potential_savings"] = sum(pod["potential_savings"] for pod in pod_analysis["overprovisioned_pods"])
+        
+        # Generate rightsizing recommendations
+        if pod_analysis["overprovisioned_pods"]:
+            pod_analysis["rightsizing_recommendations"].append({
+                "type": "reduce_overprovisioning",
+                "count": len(pod_analysis["overprovisioned_pods"]),
+                "potential_savings": pod_analysis["potential_savings"],
+                "recommendation": "Reduce CPU/memory requests for overprovisioned pods"
+            })
+        
+        if pod_analysis["underprovisioned_pods"]:
+            pod_analysis["rightsizing_recommendations"].append({
+                "type": "increase_underprovisioning",
+                "count": len(pod_analysis["underprovisioned_pods"]),
+                "recommendation": "Increase CPU/memory requests for underprovisioned pods"
+            })
+        
+        return pod_analysis
+    
+    async def _analyze_workload_rightsizing(self, cluster_data: Dict[str, Any], 
+                                         raw_metrics: Dict[str, Any], 
+                                         node_rg_costs: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze workload-level rightsizing opportunities"""
+        
+        workload_analysis = {
+            "total_workloads": 0,
+            "rightsizing_opportunities": [],
+            "scaling_recommendations": [],
+            "resource_optimization": {},
+            "potential_savings": 0.0
+        }
+        
         k8s_resources = cluster_data.get("kubernetes_resources", {})
         deployments = k8s_resources.get("deployments", [])
+        workload_analysis["total_workloads"] = len(deployments)
         
-        # Analyze each deployment
+        if not deployments:
+            return workload_analysis
+        
+        total_cost = node_rg_costs.get("total_cost", 0.0)
+        cost_per_workload = total_cost / len(deployments) if deployments else 0.0
+        
         for deployment in deployments:
-            deployment_name = deployment.get("name", "unknown")
+            workload_name = deployment.get("name", "unknown")
             namespace = deployment.get("namespace", "unknown")
             replicas = deployment.get("replicas", 1)
             ready_replicas = deployment.get("ready_replicas", 0)
             
-            # Analyze replica efficiency
-            if replicas > 0:
-                replica_efficiency = (ready_replicas / replicas) * 100
-                
-                # Check if deployment is over or under-scaled
-                recommendation = self._analyze_deployment_scaling(
-                    deployment_name, namespace, replicas, ready_replicas, replica_efficiency
-                )
-                
-                if recommendation:
-                    workload_analysis["deployment_recommendations"].append(recommendation)
+            # Get resource specifications
+            resource_requests = deployment.get("resource_requests", {})
+            resource_limits = deployment.get("resource_limits", {})
+            
+            # Analyze replica count
+            if ready_replicas < replicas:
+                # Some replicas are not ready
+                workload_analysis["rightsizing_opportunities"].append({
+                    "workload": f"{namespace}/{workload_name}",
+                    "type": "replica_optimization",
+                    "current_replicas": replicas,
+                    "ready_replicas": ready_replicas,
+                    "issue": "Some replicas not ready",
+                    "recommendation": "Investigate failed replicas or reduce replica count"
+                })
+            
+            # Analyze resource requests vs limits
+            cpu_request = resource_requests.get("cpu", 0)
+            cpu_limit = resource_limits.get("cpu", 0)
+            memory_request = resource_requests.get("memory", 0)
+            memory_limit = resource_limits.get("memory", 0)
+            
+            if cpu_limit > cpu_request * 2:  # Limit is 2x request
+                savings = cost_per_workload * 0.15  # 15% savings
+                workload_analysis["rightsizing_opportunities"].append({
+                    "workload": f"{namespace}/{workload_name}",
+                    "type": "resource_limit_optimization",
+                    "current_cpu_request": cpu_request,
+                    "current_cpu_limit": cpu_limit,
+                    "recommended_cpu_limit": cpu_request * 1.5,  # 50% buffer
+                    "potential_savings": savings,
+                    "recommendation": "Reduce CPU limits closer to requests"
+                })
+            
+            if memory_limit > memory_request * 2:  # Limit is 2x request
+                savings = cost_per_workload * 0.15  # 15% savings
+                workload_analysis["rightsizing_opportunities"].append({
+                    "workload": f"{namespace}/{workload_name}",
+                    "type": "resource_limit_optimization",
+                    "current_memory_request": memory_request,
+                    "current_memory_limit": memory_limit,
+                    "recommended_memory_limit": memory_request * 1.5,  # 50% buffer
+                    "potential_savings": savings,
+                    "recommendation": "Reduce memory limits closer to requests"
+                })
+        
+        # Calculate total potential savings
+        workload_analysis["potential_savings"] = sum(
+            opp.get("potential_savings", 0.0) for opp in workload_analysis["rightsizing_opportunities"]
+        )
         
         return workload_analysis
     
-    async def _generate_optimization_opportunities(self, analysis: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Generate comprehensive optimization opportunities"""
+    async def _generate_optimization_opportunities(self, analysis: Dict[str, Any], 
+                                                 node_rg_costs: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Generate optimization opportunities"""
         
         opportunities = []
         
-        # Pod-level opportunities
-        pod_analysis = analysis.get("pod_rightsizing", {})
-        pod_recommendations = pod_analysis.get("pod_recommendations", [])
-        
-        for rec in pod_recommendations:
-            if rec.get("potential_savings", 0) > 10:  # More than $10/month savings
-                opportunities.append({
-                    "type": "pod_rightsizing",
-                    "resource_id": rec["pod_name"],
-                    "current_allocation": {
-                        "cpu_request": rec["current_cpu_request"],
-                        "memory_request": rec["current_memory_request"]
-                    },
-                    "recommended_allocation": {
-                        "cpu_request": rec["recommended_cpu_request"],
-                        "memory_request": rec["recommended_memory_request"]
-                    },
-                    "potential_savings": rec["potential_savings"],
-                    "confidence": rec["confidence"],
-                    "implementation_effort": "low",
-                    "risk_level": "low"
-                })
-        
         # Node pool opportunities
-        node_analysis = analysis.get("node_rightsizing", {})
-        node_recommendations = node_analysis.get("node_pool_optimization", [])
+        node_pool_analysis = analysis.get("node_pool_rightsizing", {})
+        node_pool_opportunities = node_pool_analysis.get("rightsizing_opportunities", [])
         
-        for rec in node_recommendations:
-            if rec.get("action") in ["downsize", "optimize_vm_size"]:
-                opportunities.append({
-                    "type": "node_pool_optimization",
-                    "resource_id": rec["pool_name"],
-                    "current_allocation": {
-                        "vm_size": rec["current_vm_size"],
-                        "node_count": rec["current_node_count"]
-                    },
-                    "recommended_allocation": {
-                        "vm_size": rec.get("recommended_vm_size", rec["current_vm_size"]),
-                        "node_count": rec.get("recommended_node_count", rec["current_node_count"])
-                    },
-                    "potential_savings": rec.get("potential_savings", 0),
-                    "confidence": rec.get("confidence", 70),
-                    "implementation_effort": "medium",
-                    "risk_level": "medium"
-                })
+        for opp in node_pool_opportunities:
+            opportunities.append({
+                "type": "node_pool_optimization",
+                "resource_id": opp.get("pool_name", "unknown"),
+                "current_state": opp.get("current_vm_size", "unknown"),
+                "recommended_state": opp.get("recommended_vm_size", "unknown"),
+                "potential_savings": opp.get("cost_savings", 0.0),
+                "confidence": opp.get("confidence", 0.0),
+                "implementation_effort": "medium",
+                "risk": "medium"
+            })
+        
+        # Pod opportunities
+        pod_analysis = analysis.get("pod_rightsizing", {})
+        overprovisioned_pods = pod_analysis.get("overprovisioned_pods", [])
+        
+        for pod in overprovisioned_pods:
+            opportunities.append({
+                "type": "pod_rightsizing",
+                "resource_id": f"{pod['namespace']}/{pod['name']}",
+                "current_state": {
+                    "cpu_request": pod["current_cpu_request"],
+                    "memory_request": pod["current_memory_request"]
+                },
+                "recommended_state": {
+                    "cpu_request": pod["recommended_cpu_request"],
+                    "memory_request": pod["recommended_memory_request"]
+                },
+                "potential_savings": pod["potential_savings"],
+                "confidence": 75.0,
+                "implementation_effort": "low",
+                "risk": "low"
+            })
+        
+        # Workload opportunities
+        workload_analysis = analysis.get("workload_rightsizing", {})
+        workload_opportunities = workload_analysis.get("rightsizing_opportunities", [])
+        
+        for opp in workload_opportunities:
+            opportunities.append({
+                "type": "workload_optimization",
+                "resource_id": opp.get("workload", "unknown"),
+                "optimization_type": opp.get("type", "unknown"),
+                "potential_savings": opp.get("potential_savings", 0.0),
+                "confidence": 70.0,
+                "implementation_effort": "low",
+                "risk": "low"
+            })
         
         # Sort by potential savings
         opportunities.sort(key=lambda x: x["potential_savings"], reverse=True)
         
         return opportunities
     
-    async def _generate_scaling_recommendations(self, analysis: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Generate scaling recommendations for auto-scalers"""
+    async def _generate_scaling_recommendations(self, analysis: Dict[str, Any], 
+                                              node_rg_costs: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Generate scaling recommendations"""
         
-        scaling_recommendations = []
+        recommendations = []
+        
+        # Node pool scaling recommendations
+        node_pool_analysis = analysis.get("node_pool_rightsizing", {})
+        node_pool_opportunities = node_pool_analysis.get("rightsizing_opportunities", [])
+        
+        for opp in node_pool_opportunities:
+            if opp.get("type") in ["scale_up", "scale_down"]:
+                recommendations.append({
+                    "type": "node_pool_scaling",
+                    "pool_name": opp.get("pool_name", "unknown"),
+                    "action": opp.get("type"),
+                    "current_count": opp.get("current_count", 0),
+                    "recommended_count": opp.get("recommended_count", 0),
+                    "rationale": opp.get("rationale", ""),
+                    "confidence": opp.get("confidence", 0.0),
+                    "impact": opp.get("cost_savings", 0.0)
+                })
         
         # HPA recommendations
-        pod_analysis = analysis.get("pod_rightsizing", {})
+        workload_analysis = analysis.get("workload_rightsizing", {})
+        workload_opportunities = workload_analysis.get("rightsizing_opportunities", [])
         
-        # VPA recommendations based on pod analysis
-        for pod_rec in pod_analysis.get("pod_recommendations", []):
-            if pod_rec.get("action") == "resize":
-                scaling_recommendations.append({
-                    "type": "VPA",
-                    "target": pod_rec["pod_name"],
-                    "current_requests": {
-                        "cpu": f"{pod_rec['current_cpu_request']}m",
-                        "memory": f"{pod_rec['current_memory_request']}Mi"
-                    },
-                    "recommended_requests": {
-                        "cpu": f"{pod_rec['recommended_cpu_request']}m",
-                        "memory": f"{pod_rec['recommended_memory_request']}Mi"
-                    },
-                    "expected_savings": pod_rec.get("potential_savings", 0),
-                    "confidence": pod_rec.get("confidence", 70)
+        for opp in workload_opportunities:
+            if opp.get("type") == "replica_optimization":
+                recommendations.append({
+                    "type": "horizontal_pod_autoscaler",
+                    "workload": opp.get("workload", "unknown"),
+                    "action": "implement_hpa",
+                    "current_replicas": opp.get("current_replicas", 0),
+                    "recommended_min_replicas": max(1, opp.get("ready_replicas", 0)),
+                    "recommended_max_replicas": opp.get("current_replicas", 0),
+                    "rationale": "Optimize replica count based on load",
+                    "confidence": 60.0
                 })
         
-        # Cluster Autoscaler recommendations
-        node_analysis = analysis.get("node_rightsizing", {})
-        for node_rec in node_analysis.get("node_pool_optimization", []):
-            if node_rec.get("action") == "enable_autoscaling":
-                scaling_recommendations.append({
-                    "type": "Cluster_Autoscaler",
-                    "target": node_rec["pool_name"],
-                    "recommendation": "Enable auto-scaling",
-                    "suggested_min": node_rec.get("suggested_min_nodes", 1),
-                    "suggested_max": node_rec.get("suggested_max_nodes", 10),
-                    "current_count": node_rec["current_node_count"],
-                    "rationale": node_rec.get("rationale", "")
-                })
-        
-        return scaling_recommendations
+        return recommendations
     
-    async def _create_resource_recommendations(self, analysis: Dict[str, Any]) -> Dict[str, Any]:
-        """Create detailed resource recommendations"""
+    async def _create_resource_recommendations(self, analysis: Dict[str, Any], 
+                                             node_rg_costs: Dict[str, Any]) -> Dict[str, Any]:
+        """Create resource recommendations"""
         
         recommendations = {
             "immediate_actions": [],
             "planned_actions": [],
-            "long_term_actions": [],
-            "resource_policies": []
+            "long_term_actions": []
         }
         
+        # Extract all opportunities
         opportunities = analysis.get("optimization_opportunities", [])
         
         for opp in opportunities:
+            confidence = opp.get("confidence", 0.0)
+            savings = opp.get("potential_savings", 0.0)
+            risk = opp.get("risk", "medium")
+            
             action = {
-                "resource_id": opp["resource_id"],
-                "type": opp["type"],
-                "current": opp["current_allocation"],
-                "recommended": opp["recommended_allocation"],
-                "savings": opp["potential_savings"],
-                "effort": opp["implementation_effort"],
-                "risk": opp["risk_level"]
+                "resource_id": opp.get("resource_id", "unknown"),
+                "type": opp.get("type", "unknown"),
+                "potential_savings": savings,
+                "confidence": confidence,
+                "risk": risk,
+                "implementation_effort": opp.get("implementation_effort", "medium")
             }
             
-            # Categorize by implementation timeline
-            if opp["implementation_effort"] == "low" and opp["risk_level"] == "low":
+            # Categorize by urgency and risk
+            if confidence > 80 and risk == "low" and savings > 100:
                 recommendations["immediate_actions"].append(action)
-            elif opp["implementation_effort"] == "medium":
+            elif confidence > 60 and savings > 50:
                 recommendations["planned_actions"].append(action)
             else:
                 recommendations["long_term_actions"].append(action)
         
-        # Generate resource policies
-        pod_analysis = analysis.get("pod_rightsizing", {})
-        efficiency = pod_analysis.get("resource_efficiency", {})
-        
-        if efficiency.get("avg_cpu_over_provisioning", 0) > 50:
-            recommendations["resource_policies"].append({
-                "type": "ResourceQuota",
-                "recommendation": "Implement CPU resource quotas to prevent over-provisioning",
-                "rationale": f"Average CPU over-provisioning is {efficiency['avg_cpu_over_provisioning']:.1f}%"
-            })
-        
-        if efficiency.get("avg_memory_over_provisioning", 0) > 50:
-            recommendations["resource_policies"].append({
-                "type": "LimitRange",
-                "recommendation": "Implement memory limit ranges for better resource governance",
-                "rationale": f"Average memory over-provisioning is {efficiency['avg_memory_over_provisioning']:.1f}%"
-            })
-        
         return recommendations
     
-    async def _calculate_rightsizing_cost_impact(self, analysis: Dict[str, Any]) -> Dict[str, Any]:
-        """Calculate cost impact of right-sizing recommendations"""
+    async def _calculate_rightsizing_cost_impact(self, analysis: Dict[str, Any], 
+                                               node_rg_costs: Dict[str, Any]) -> Dict[str, Any]:
+        """Calculate cost impact of rightsizing"""
         
         cost_impact = {
             "total_potential_savings": 0.0,
             "savings_by_category": {},
-            "implementation_costs": {},
+            "implementation_costs": 0.0,
             "roi_analysis": {},
-            "payback_period": {}
+            "payback_period": 0.0
         }
         
-        # Calculate savings from opportunities
-        opportunities = analysis.get("optimization_opportunities", [])
+        # Calculate savings by category
+        categories = ["node_pool_rightsizing", "pod_rightsizing", "workload_rightsizing"]
         
-        savings_by_category = defaultdict(float)
-        for opp in opportunities:
-            category = opp["type"]
-            savings = opp["potential_savings"]
-            savings_by_category[category] += savings
-        
-        cost_impact["savings_by_category"] = dict(savings_by_category)
-        cost_impact["total_potential_savings"] = sum(savings_by_category.values())
+        for category in categories:
+            category_analysis = analysis.get(category, {})
+            category_savings = category_analysis.get("potential_savings", 0.0)
+            
+            cost_impact["savings_by_category"][category] = category_savings
+            cost_impact["total_potential_savings"] += category_savings
         
         # Estimate implementation costs
-        implementation_costs = {
-            "pod_rightsizing": len([o for o in opportunities if o["type"] == "pod_rightsizing"]) * 2,  # $2 per pod change
-            "node_pool_optimization": len([o for o in opportunities if o["type"] == "node_pool_optimization"]) * 50,  # $50 per node pool change
-            "total": 0
-        }
-        implementation_costs["total"] = sum(implementation_costs.values()) - implementation_costs["total"]
-        cost_impact["implementation_costs"] = implementation_costs
+        opportunities = analysis.get("optimization_opportunities", [])
+        implementation_cost = len(opportunities) * 50  # $50 per change
+        cost_impact["implementation_costs"] = implementation_cost
         
         # ROI analysis
         annual_savings = cost_impact["total_potential_savings"] * 12
-        total_implementation_cost = implementation_costs["total"]
-        
-        if total_implementation_cost > 0:
-            roi_percentage = ((annual_savings - total_implementation_cost) / total_implementation_cost) * 100
-            payback_months = total_implementation_cost / max(cost_impact["total_potential_savings"], 1)
+        if implementation_cost > 0:
+            roi = ((annual_savings - implementation_cost) / implementation_cost) * 100
+            payback_months = implementation_cost / max(cost_impact["total_potential_savings"], 1)
         else:
-            roi_percentage = float('inf')
+            roi = float('inf')
             payback_months = 0
         
         cost_impact["roi_analysis"] = {
             "annual_savings": annual_savings,
-            "implementation_cost": total_implementation_cost,
-            "roi_percentage": roi_percentage,
-            "net_annual_benefit": annual_savings - total_implementation_cost
+            "implementation_cost": implementation_cost,
+            "roi_percentage": roi,
+            "net_annual_benefit": annual_savings - implementation_cost
         }
         
-        cost_impact["payback_period"] = {
-            "months": payback_months,
-            "description": f"Payback in {payback_months:.1f} months" if payback_months < 12 else "Payback over 1 year"
-        }
+        cost_impact["payback_period"] = payback_months
         
         return cost_impact
     
-    async def _create_implementation_plan(self, analysis: Dict[str, Any]) -> Dict[str, Any]:
-        """Create phased implementation plan"""
+    async def _create_implementation_plan(self, analysis: Dict[str, Any], 
+                                        node_rg_costs: Dict[str, Any]) -> Dict[str, Any]:
+        """Create implementation plan"""
         
         plan = {
             "phase_1_immediate": [],
@@ -495,329 +679,146 @@ class RightsizingAnalytics:
             "success_metrics": []
         }
         
-        recommendations = analysis.get("resource_recommendations", {})
+        opportunities = analysis.get("optimization_opportunities", [])
         
-        # Phase 1: Immediate actions (low risk, high impact)
-        immediate_actions = recommendations.get("immediate_actions", [])
-        for action in immediate_actions[:10]:  # Limit to top 10
-            plan["phase_1_immediate"].append({
-                "action": f"Right-size {action['resource_id']}",
-                "timeline": "1-2 weeks",
-                "expected_savings": action["savings"],
-                "risk": action["risk"],
-                "steps": [
-                    "Analyze current usage patterns",
-                    "Update resource requests/limits",
-                    "Monitor for 48 hours",
-                    "Validate performance"
-                ]
-            })
+        for opp in opportunities:
+            confidence = opp.get("confidence", 0.0)
+            savings = opp.get("potential_savings", 0.0)
+            risk = opp.get("risk", "medium")
+            
+            phase_item = {
+                "resource_id": opp.get("resource_id", "unknown"),
+                "action": opp.get("type", "unknown"),
+                "potential_savings": savings,
+                "confidence": confidence,
+                "risk": risk
+            }
+            
+            # Phase 1: High confidence, low risk, high savings
+            if confidence > 80 and risk == "low" and savings > 100:
+                plan["phase_1_immediate"].append(phase_item)
+            # Phase 2: Medium confidence, medium risk
+            elif confidence > 60 and savings > 50:
+                plan["phase_2_planned"].append(phase_item)
+            # Phase 3: Lower confidence or savings
+            else:
+                plan["phase_3_long_term"].append(phase_item)
         
-        # Phase 2: Planned actions
-        planned_actions = recommendations.get("planned_actions", [])
-        for action in planned_actions[:5]:  # Limit to top 5
-            plan["phase_2_planned"].append({
-                "action": f"Optimize {action['resource_id']}",
-                "timeline": "2-4 weeks",
-                "expected_savings": action["savings"],
-                "risk": action["risk"],
-                "steps": [
-                    "Detailed capacity planning",
-                    "Create rollback plan",
-                    "Implement changes during maintenance window",
-                    "Monitor and adjust"
-                ]
-            })
-        
-        # Prerequisites
+        # Add prerequisites
         plan["prerequisites"] = [
-            "Establish baseline metrics collection",
+            "Establish baseline metrics",
             "Set up monitoring and alerting",
-            "Create rollback procedures",
-            "Get stakeholder approval for changes"
+            "Define rollback procedures",
+            "Get stakeholder approval"
         ]
         
-        # Success metrics
+        # Add success metrics
         plan["success_metrics"] = [
-            "Achieve target utilization rates (70% CPU, 70% memory)",
-            "Reduce resource waste by 30%",
-            "Maintain application performance SLAs",
-            "Realize projected cost savings within 3 months"
+            "Cost reduction achieved",
+            "Resource utilization improved",
+            "Application performance maintained",
+            "No service degradation"
         ]
         
         return plan
     
-    async def _calculate_confidence_scores(self, analysis: Dict[str, Any], cluster_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _calculate_confidence_scores(self, analysis: Dict[str, Any]) -> Dict[str, Any]:
         """Calculate confidence scores for recommendations"""
         
-        confidence = {
+        confidence_scores = {
             "overall_confidence": 0.0,
             "data_quality_score": 0.0,
-            "recommendation_confidence": {},
-            "risk_assessment": {}
+            "recommendation_reliability": 0.0,
+            "factors": []
         }
         
-        # Assess data quality
-        raw_metrics = cluster_data.get("raw_metrics", {})
-        container_insights = raw_metrics.get("container_insights_data", {})
+        # Factors affecting confidence
+        factors = []
         
-        data_sources = ["pod_cpu_usage", "pod_memory_usage", "pod_resource_requests_limits"]
-        available_sources = sum(1 for source in data_sources if source in container_insights)
-        data_quality = (available_sources / len(data_sources)) * 100
+        # Data availability
+        if analysis.get("node_pool_rightsizing", {}).get("rightsizing_opportunities"):
+            factors.append({"factor": "node_pool_data_available", "weight": 0.3, "score": 90.0})
         
-        # Assess data completeness
-        total_data_points = 0
-        for source in data_sources:
-            if source in container_insights:
-                data_points = len(container_insights[source].get("data_points", []))
-                total_data_points += data_points
+        if analysis.get("pod_rightsizing", {}).get("total_pods", 0) > 0:
+            factors.append({"factor": "pod_data_available", "weight": 0.3, "score": 85.0})
         
-        completeness_score = min(100, (total_data_points / 100) * 100)  # Normalize to 100
+        if analysis.get("workload_rightsizing", {}).get("total_workloads", 0) > 0:
+            factors.append({"factor": "workload_data_available", "weight": 0.2, "score": 80.0})
         
-        confidence["data_quality_score"] = (data_quality + completeness_score) / 2
-        
-        # Calculate recommendation confidence
+        # Metrics quality
         opportunities = analysis.get("optimization_opportunities", [])
+        if opportunities:
+            avg_confidence = sum(opp.get("confidence", 0.0) for opp in opportunities) / len(opportunities)
+            factors.append({"factor": "opportunity_confidence", "weight": 0.2, "score": avg_confidence})
         
-        for opp in opportunities:
-            resource_id = opp["resource_id"]
-            opp_confidence = opp.get("confidence", 50)
-            
-            # Adjust confidence based on data quality
-            adjusted_confidence = opp_confidence * (confidence["data_quality_score"] / 100)
-            
-            confidence["recommendation_confidence"][resource_id] = {
-                "base_confidence": opp_confidence,
-                "adjusted_confidence": adjusted_confidence,
-                "risk_level": opp["risk_level"]
-            }
+        # Calculate overall confidence
+        if factors:
+            weighted_score = sum(factor["weight"] * factor["score"] for factor in factors)
+            total_weight = sum(factor["weight"] for factor in factors)
+            confidence_scores["overall_confidence"] = weighted_score / total_weight
         
-        # Overall confidence
-        if confidence["recommendation_confidence"]:
-            avg_confidence = statistics.mean([
-                rec["adjusted_confidence"] 
-                for rec in confidence["recommendation_confidence"].values()
-            ])
-            confidence["overall_confidence"] = avg_confidence
+        confidence_scores["factors"] = factors
         
-        return confidence
+        return confidence_scores
     
     # Helper methods
-    def _generate_pod_recommendation(self, pod_name: str, usage_data: Dict[str, Any], 
-                                   cpu_usage: List[float], memory_usage: List[float]) -> Optional[Dict[str, Any]]:
-        """Generate right-sizing recommendation for a pod"""
-        
-        # Calculate usage statistics
-        avg_cpu = statistics.mean(cpu_usage)
-        p95_cpu = self._percentile(cpu_usage, 95)
-        avg_memory = statistics.mean(memory_usage)
-        p95_memory = self._percentile(memory_usage, 95)
-        
-        current_cpu_request = usage_data["cpu_requests"]
-        current_memory_request = usage_data["memory_requests"]
-        
-        if current_cpu_request == 0 or current_memory_request == 0:
-            return None  # Skip pods without resource requests
-        
-        # Calculate recommended values with safety buffer
-        safety_factor = 1 + (self.parameters["safety_buffer"] / 100)
-        
-        recommended_cpu = max(
-            self.parameters["min_cpu_millicores"],
-            int(p95_cpu * safety_factor)
-        )
-        recommended_memory = max(
-            self.parameters["min_memory_mb"],
-            int(p95_memory * safety_factor)
-        )
-        
-        # Determine if resizing is beneficial
-        cpu_savings_percent = ((current_cpu_request - recommended_cpu) / current_cpu_request) * 100
-        memory_savings_percent = ((current_memory_request - recommended_memory) / current_memory_request) * 100
-        
-        # Only recommend if significant savings (>15%) or if severely over-provisioned (>200%)
-        should_resize = (
-            (cpu_savings_percent > 15 or memory_savings_percent > 15) or
-            (current_cpu_request > recommended_cpu * 2 or current_memory_request > recommended_memory * 2)
-        )
-        
-        if not should_resize:
-            return None
-        
-        # Calculate potential savings
-        cpu_cost_savings = (current_cpu_request - recommended_cpu) / 1000 * 20  # $20 per core/month
-        memory_cost_savings = (current_memory_request - recommended_memory) / 1024 * 5  # $5 per GB/month
-        total_savings = cpu_cost_savings + memory_cost_savings
-        
-        # Calculate confidence based on data consistency
-        cpu_cv = statistics.stdev(cpu_usage) / avg_cpu if avg_cpu > 0 else 1
-        memory_cv = statistics.stdev(memory_usage) / avg_memory if avg_memory > 0 else 1
-        confidence = max(0, min(100, 100 - (cpu_cv + memory_cv) * 50))
-        
-        return {
-            "pod_name": pod_name,
-            "action": "resize",
-            "current_cpu_request": current_cpu_request,
-            "current_memory_request": current_memory_request,
-            "recommended_cpu_request": recommended_cpu,
-            "recommended_memory_request": recommended_memory,
-            "cpu_savings_percent": cpu_savings_percent,
-            "memory_savings_percent": memory_savings_percent,
-            "potential_savings": total_savings,
-            "confidence": confidence,
-            "usage_stats": {
-                "avg_cpu": avg_cpu,
-                "p95_cpu": p95_cpu,
-                "avg_memory": avg_memory,
-                "p95_memory": p95_memory
-            }
-        }
-    
-    def _generate_node_pool_recommendation(self, pool: Dict[str, Any], avg_cpu: float, 
-                                         avg_memory: float, peak_cpu: float, peak_memory: float) -> Optional[Dict[str, Any]]:
-        """Generate right-sizing recommendation for a node pool"""
-        
-        pool_name = pool.get("name", "unknown")
-        vm_size = pool.get("vm_size", "")
-        node_count = pool.get("count", 0)
-        auto_scaling = pool.get("auto_scaling_enabled", False)
-        
-        recommendation = {
-            "pool_name": pool_name,
-            "current_vm_size": vm_size,
-            "current_node_count": node_count,
-            "avg_cpu_utilization": avg_cpu,
-            "avg_memory_utilization": avg_memory,
-            "peak_cpu_utilization": peak_cpu,
-            "peak_memory_utilization": peak_memory
+    def _parse_vm_size(self, vm_size: str) -> tuple:
+        """Parse VM size to extract CPU cores and memory GB"""
+        size_mappings = {
+            "Standard_B2s": (2, 4),
+            "Standard_B4ms": (4, 16),
+            "Standard_D2s_v3": (2, 8),
+            "Standard_D4s_v3": (4, 16),
+            "Standard_D8s_v3": (8, 32),
+            "Standard_D16s_v3": (16, 64),
+            "Standard_DS2_v2": (2, 7),
+            "Standard_DS3_v2": (4, 14),
+            "Standard_DS4_v2": (8, 28),
+            "Standard_DS5_v2": (16, 56),
+            "Standard_E2s_v3": (2, 16),
+            "Standard_E4s_v3": (4, 32),
+            "Standard_E8s_v3": (8, 64),
+            "Standard_E16s_v3": (16, 128),
+            "Standard_F2s_v2": (2, 4),
+            "Standard_F4s_v2": (4, 8),
+            "Standard_F8s_v2": (8, 16),
+            "Standard_F16s_v2": (16, 32),
         }
         
-        # Determine action based on utilization
-        if avg_cpu < 30 and avg_memory < 30:
-            # Severely underutilized
-            if node_count > 1:
-                recommendation.update({
-                    "action": "downsize",
-                    "recommended_node_count": max(1, node_count - 1),
-                    "rationale": "Low average utilization suggests over-provisioning",
-                    "potential_savings": self._estimate_node_cost() * (node_count - max(1, node_count - 1)),
-                    "confidence": 80
-                })
-            else:
-                recommendation.update({
-                    "action": "optimize_vm_size",
-                    "recommended_vm_size": self._suggest_smaller_vm_size(vm_size),
-                    "rationale": "Consider smaller VM size for better efficiency",
-                    "potential_savings": self._estimate_vm_size_savings(vm_size),
-                    "confidence": 60
-                })
-        elif peak_cpu > 85 or peak_memory > 85:
-            # High peak utilization
-            if auto_scaling:
-                recommendation.update({
-                    "action": "adjust_autoscaling",
-                    "suggested_max_nodes": pool.get("max_count", 10) + 2,
-                    "rationale": "High peak utilization may require more autoscaling headroom",
-                    "confidence": 70
-                })
-            else:
-                recommendation.update({
-                    "action": "enable_autoscaling",
-                    "suggested_min_nodes": node_count,
-                    "suggested_max_nodes": node_count + 3,
-                    "rationale": "High utilization variance suggests need for autoscaling",
-                    "confidence": 75
-                })
-        else:
-            return None  # No recommendation needed
-        
-        return recommendation
+        return size_mappings.get(vm_size, (2, 4))
     
-    def _analyze_deployment_scaling(self, name: str, namespace: str, replicas: int, 
-                                  ready_replicas: int, efficiency: float) -> Optional[Dict[str, Any]]:
-        """Analyze deployment for scaling optimization"""
-        
-        if efficiency < 80 and replicas > 1:
-            # Poor replica efficiency
-            return {
-                "deployment_name": name,
-                "namespace": namespace,
-                "current_replicas": replicas,
-                "ready_replicas": ready_replicas,
-                "efficiency": efficiency,
-                "action": "investigate_failures",
-                "rationale": "Low replica efficiency indicates potential issues",
-                "recommended_action": "Debug failed replicas or reduce replica count"
-            }
-        elif replicas == 1 and ready_replicas == 1:
-            # Single replica deployment
-            return {
-                "deployment_name": name,
-                "namespace": namespace,
-                "current_replicas": replicas,
-                "action": "consider_scaling",
-                "rationale": "Single replica deployment may need HA consideration",
-                "recommended_action": "Evaluate if HA is needed and scale accordingly"
-            }
-        
-        return None
-    
-    def _calculate_avg_overprovisioning(self, recommendations: List[Dict[str, Any]], resource_type: str) -> float:
-        """Calculate average over-provisioning percentage"""
-        
-        if not recommendations:
-            return 0.0
-        
-        savings_key = f"{resource_type}_savings_percent"
-        savings = [rec.get(savings_key, 0) for rec in recommendations if savings_key in rec]
-        
-        return statistics.mean(savings) if savings else 0.0
-    
-    def _percentile(self, data: List[float], percentile: int) -> float:
-        """Calculate percentile of data"""
-        if not data:
-            return 0.0
-        
-        sorted_data = sorted(data)
-        index = (percentile / 100) * (len(sorted_data) - 1)
-        
-        if index.is_integer():
-            return sorted_data[int(index)]
-        else:
-            lower = sorted_data[int(index)]
-            upper = sorted_data[int(index) + 1]
-            return lower + (upper - lower) * (index - int(index))
-    
-    def _estimate_node_cost(self) -> float:
-        """Estimate monthly cost per node"""
-        return 70.0  # Simplified estimate
-    
-    def _estimate_vm_size_savings(self, current_vm_size: str) -> float:
-        """Estimate savings from VM size optimization"""
-        # Simplified savings estimation
-        return 20.0  # $20/month savings
-    
-    def _suggest_smaller_vm_size(self, current_vm_size: str) -> str:
-        """Suggest smaller VM size"""
-        
-        vm_size_map = {
-            "Standard_D4s_v3": "Standard_D2s_v3",
-            "Standard_D8s_v3": "Standard_D4s_v3",
-            "Standard_D16s_v3": "Standard_D8s_v3",
-            "Standard_F8s_v2": "Standard_F4s_v2",
+    def _get_next_vm_size(self, current_vm_size: str) -> str:
+        """Get next larger VM size"""
+        size_progression = {
+            "Standard_D2s_v3": "Standard_D4s_v3",
+            "Standard_D4s_v3": "Standard_D8s_v3",
+            "Standard_D8s_v3": "Standard_D16s_v3",
+            "Standard_B2s": "Standard_B4ms",
+            "Standard_E2s_v3": "Standard_E4s_v3",
+            "Standard_E4s_v3": "Standard_E8s_v3",
+            "Standard_E8s_v3": "Standard_E16s_v3",
+            "Standard_F2s_v2": "Standard_F4s_v2",
+            "Standard_F4s_v2": "Standard_F8s_v2",
+            "Standard_F8s_v2": "Standard_F16s_v2",
         }
         
-        return vm_size_map.get(current_vm_size, current_vm_size)
+        return size_progression.get(current_vm_size, current_vm_size)
     
-    @staticmethod
-    def safe_float(value, default=0.0):
-        try:
-            
-            if value is None or value == '' or value == 'NaN' or value == "'NaN'":
-                return default
-            result = float(value)
-            if math.isnan(result):
-                return default
-            return result
-        except (ValueError, TypeError):
-            return default
+    def _find_optimal_vm_size(self, target_cpu: float, target_memory: float) -> str:
+        """Find optimal VM size for given requirements"""
+        vm_sizes = {
+            "Standard_B2s": (2, 4),
+            "Standard_D2s_v3": (2, 8),
+            "Standard_D4s_v3": (4, 16),
+            "Standard_D8s_v3": (8, 32),
+            "Standard_E2s_v3": (2, 16),
+            "Standard_E4s_v3": (4, 32),
+            "Standard_F2s_v2": (2, 4),
+            "Standard_F4s_v2": (4, 8),
+        }
+        
+        for vm_size, (cpu, memory) in vm_sizes.items():
+            if cpu >= target_cpu and memory >= target_memory:
+                return vm_size
+        
+        return "Standard_D4s_v3"

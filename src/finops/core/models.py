@@ -67,7 +67,6 @@ class CostData(BaseModel):
     monitoring: float = Field(0.0, ge=0, description="Monitoring cost")
     other: float = Field(0.0, ge=0, description="Other costs")
     currency: str = Field("USD", description="Currency")
-    daily_breakdown: List[Dict[str, Any]] = Field(default_factory=list)
     by_service: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
     cost_trend: str = Field("stable", description="Cost trend: increasing, decreasing, stable")
     allocation_percentage: float = Field(0.0, ge=0, le=100, description="Percentage of total cluster cost")

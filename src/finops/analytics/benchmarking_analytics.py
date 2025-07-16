@@ -1,630 +1,699 @@
 # src/finops/analytics/benchmarking_analytics.py
 """
-Benchmarking Analytics Module - Compare performance against industry standards
+Enhanced Phase 2 Benchmarking Analytics
 """
 
-from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime, timezone
+import asyncio
+from typing import Dict, Any, List, Optional
+from datetime import datetime
 import structlog
-import statistics
 
 logger = structlog.get_logger(__name__)
 
 
 class BenchmarkingAnalytics:
-    """Advanced benchmarking analytics for industry comparison"""
+    """Enhanced Benchmarking Analytics for Phase 2"""
     
     def __init__(self, config: Dict[str, Any]):
         self.config = config
-        self.logger = logger.bind(module="benchmarking_analytics")
+        self.logger = logger.bind(analytics="benchmarking")
         
-        # Industry benchmarks (these would typically come from external data sources)
+        # Industry benchmarks
         self.industry_benchmarks = {
-            'cost_per_pod_per_month': {'p50': 15.0, 'p75': 25.0, 'p90': 40.0},
-            'cost_per_cpu_core_per_month': {'p50': 35.0, 'p75': 50.0, 'p90': 75.0},
-            'cost_per_gb_memory_per_month': {'p50': 8.0, 'p75': 12.0, 'p90': 18.0},
-            'cpu_utilization_percentage': {'p50': 45.0, 'p75': 65.0, 'p90': 80.0},
-            'memory_utilization_percentage': {'p50': 50.0, 'p75': 70.0, 'p90': 85.0},
-            'waste_percentage': {'p10': 5.0, 'p25': 15.0, 'p50': 25.0},
-            'efficiency_score': {'p25': 60.0, 'p50': 75.0, 'p75': 85.0},
-            'pods_per_node': {'p50': 30.0, 'p75': 50.0, 'p90': 70.0},
-            'container_density': {'p50': 15.0, 'p75': 25.0, 'p90': 35.0}
-        }
-        
-        # Best practices thresholds
-        self.best_practices = {
-            'target_cpu_utilization': 70.0,
-            'target_memory_utilization': 75.0,
-            'max_acceptable_waste': 20.0,
-            'min_efficiency_score': 70.0,
-            'optimal_pods_per_node': 40.0
+            "cost_per_pod_monthly": 150.0,  # USD
+            "cost_per_cpu_hour": 0.05,      # USD
+            "cost_per_gb_memory_hour": 0.01, # USD
+            "cpu_utilization_target": 65.0,  # %
+            "memory_utilization_target": 70.0, # %
+            "waste_percentage_threshold": 15.0, # %
+            "efficiency_score_target": 75.0,   # %
+            "cost_optimization_potential": 20.0 # %
         }
     
-    async def analyze_cluster_benchmarking(self, cluster_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Comprehensive benchmarking analysis for a cluster"""
+    async def analyze_cluster_benchmarks(self, cluster_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Enhanced benchmarking analysis"""
         
-        cluster_info = cluster_data.get("cluster_info", {})
-        cluster_name = cluster_info.get("name", "unknown")
-        
-        self.logger.info(f"Starting benchmarking analysis for cluster: {cluster_name}")
+        cluster_name = cluster_data.get("cluster_info", {}).get("name", "unknown")
+
         
         analysis = {
             "cluster_name": cluster_name,
-            "analysis_timestamp": datetime.now(timezone.utc).isoformat(),
-            "cost_benchmarks": {},
-            "utilization_benchmarks": {},
-            "efficiency_benchmarks": {},
-            "density_benchmarks": {},
-            "performance_benchmarks": {},
+            "analysis_timestamp": datetime.now().isoformat(),
+            "performance_scores": {},
             "industry_comparison": {},
-            "best_practices_assessment": {},
-            "benchmarking_score": 0.0,
-            "improvement_opportunities": []
+            "peer_comparison": {},
+            "optimization_potential": {},
+            "maturity_assessment": {},
+            "recommendations": []
         }
         
         try:
-            # 1. Cost benchmarking
-            analysis["cost_benchmarks"] = await self._benchmark_costs(cluster_data)
+            node_rg_costs = cluster_data.get("node_resource_group_costs", {})
             
-            # 2. Utilization benchmarking
-            analysis["utilization_benchmarks"] = await self._benchmark_utilization(cluster_data)
-            
-            # 3. Efficiency benchmarking
-            analysis["efficiency_benchmarks"] = await self._benchmark_efficiency(cluster_data)
-            
-            # 4. Density benchmarking
-            analysis["density_benchmarks"] = await self._benchmark_density(cluster_data)
-            
-            # 5. Performance benchmarking
-            analysis["performance_benchmarks"] = await self._benchmark_performance(cluster_data)
-            
-            # 6. Industry comparison
-            analysis["industry_comparison"] = await self._compare_to_industry(analysis)
-            
-            # 7. Best practices assessment
-            analysis["best_practices_assessment"] = await self._assess_best_practices(analysis)
-            
-            # 8. Calculate overall benchmarking score
-            analysis["benchmarking_score"] = self._calculate_benchmarking_score(analysis)
-            
-            # 9. Identify improvement opportunities
-            analysis["improvement_opportunities"] = await self._identify_improvement_opportunities(analysis)
-            
-            self.logger.info(
-                f"Benchmarking analysis completed for {cluster_name}",
-                benchmarking_score=analysis["benchmarking_score"],
-                improvement_opportunities=len(analysis["improvement_opportunities"])
-            )
-            
+            if "error" not in node_rg_costs:
+                # 1. Performance scoring
+                analysis["performance_scores"] = await self._calculate_performance_scores(
+                    cluster_data, node_rg_costs
+                )
+                
+                # 2. Industry comparison
+                analysis["industry_comparison"] = await self._compare_with_industry(
+                    cluster_data, node_rg_costs
+                )
+                
+                # 3. Optimization potential
+                analysis["optimization_potential"] = await self._assess_optimization_potential(
+                    cluster_data, node_rg_costs
+                )
+                
+                # 4. Maturity assessment
+                analysis["maturity_assessment"] = await self._assess_finops_maturity(
+                    cluster_data, node_rg_costs
+                )
+                
+                # 5. Generate recommendations
+                analysis["recommendations"] = await self._generate_benchmark_recommendations(
+                    analysis
+                )
+                
+                self.logger.info(f"Benchmarking analysis completed for {cluster_name}")
+            else:
+                self.logger.warning(f"Skipping benchmarking for {cluster_name} - no cost data")
+                analysis["error"] = "No valid cost data available"
+                
         except Exception as e:
             self.logger.error(f"Benchmarking analysis failed for {cluster_name}: {e}")
             analysis["error"] = str(e)
         
         return analysis
     
-    async def _benchmark_costs(self, cluster_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Benchmark cost metrics against industry standards"""
+    async def _calculate_performance_scores(self, cluster_data: Dict[str, Any], 
+                                          node_rg_costs: Dict[str, Any]) -> Dict[str, Any]:
+        """Calculate performance scores against benchmarks"""
         
-        cost_benchmarks = {
-            "cost_per_pod": {},
-            "cost_per_cpu_core": {},
-            "cost_per_gb_memory": {},
-            "total_cost_efficiency": {},
-            "cost_percentile_ranking": {}
+        scores = {
+            "cost_efficiency_score": 0.0,
+            "resource_efficiency_score": 0.0,
+            "operational_efficiency_score": 0.0,
+            "overall_score": 0.0,
+            "scoring_details": {}
         }
         
-        # Extract cost data
-        detailed_costs = cluster_data.get("detailed_costs", {})
-        total_cost = detailed_costs.get("summary", {}).get("total_cost", 0.0)
-        
-        # Extract cluster metrics
+        total_cost = node_rg_costs.get("total_cost", 0.0)
         k8s_resources = cluster_data.get("kubernetes_resources", {})
-        total_pods = len(k8s_resources.get("pods", []))
+        pods = k8s_resources.get("pods", [])
         
-        # Calculate cluster capacity
-        node_pools = cluster_data.get("node_pools", [])
-        total_cpu_cores = 0
-        total_memory_gb = 0
+        # Cost efficiency scoring
+        cost_scores = []
         
-        for pool in node_pools:
-            vm_size = pool.get("vm_size", "")
-            node_count = pool.get("count", 0)
-            cpu_cores, memory_gb = self._parse_vm_specs(vm_size)
-            total_cpu_cores += cpu_cores * node_count
-            total_memory_gb += memory_gb * node_count
+        # Cost per pod
+        if pods and total_cost > 0:
+            cost_per_pod = total_cost / len(pods)
+            benchmark_cost_per_pod = self.industry_benchmarks["cost_per_pod_monthly"]
+            
+            if cost_per_pod <= benchmark_cost_per_pod * 0.8:  # 20% better
+                pod_score = 100.0
+            elif cost_per_pod <= benchmark_cost_per_pod:
+                pod_score = 80.0
+            elif cost_per_pod <= benchmark_cost_per_pod * 1.2:  # 20% worse
+                pod_score = 60.0
+            else:
+                pod_score = 40.0
+            
+            cost_scores.append(pod_score)
+            scores["scoring_details"]["cost_per_pod"] = {
+                "current": cost_per_pod,
+                "benchmark": benchmark_cost_per_pod,
+                "score": pod_score,
+                "performance": "excellent" if pod_score >= 90 else "good" if pod_score >= 70 else "needs_improvement"
+            }
         
-        # Calculate cost metrics
-        if total_pods > 0:
-            cost_per_pod = total_cost / total_pods
-            cost_benchmarks["cost_per_pod"] = self._compare_to_benchmark(
-                cost_per_pod, "cost_per_pod_per_month"
-            )
-        
-        if total_cpu_cores > 0:
-            cost_per_cpu_core = total_cost / total_cpu_cores
-            cost_benchmarks["cost_per_cpu_core"] = self._compare_to_benchmark(
-                cost_per_cpu_core, "cost_per_cpu_core_per_month"
-            )
-        
-        if total_memory_gb > 0:
-            cost_per_gb_memory = total_cost / total_memory_gb
-            cost_benchmarks["cost_per_gb_memory"] = self._compare_to_benchmark(
-                cost_per_gb_memory, "cost_per_gb_memory_per_month"
-            )
-        
-        return cost_benchmarks
-    
-    async def _benchmark_utilization(self, cluster_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Benchmark utilization metrics"""
-        
-        utilization_benchmarks = {
-            "cpu_utilization": {},
-            "memory_utilization": {},
-            "storage_utilization": {},
-            "overall_utilization_score": 0.0
-        }
-        
-        # Extract utilization data from metrics
+        # Resource efficiency scoring
         raw_metrics = cluster_data.get("raw_metrics", {})
         container_insights = raw_metrics.get("container_insights_data", {})
         
-        # CPU utilization benchmarking
-        if "cluster_capacity_summary" in container_insights:
-            capacity_data = container_insights["cluster_capacity_summary"]
-            cpu_utilization_data = []
-            memory_utilization_data = []
+        resource_scores = []
+        
+        # CPU utilization scoring
+        if "cluster_cpu_utilization" in container_insights:
+            cpu_data = container_insights["cluster_cpu_utilization"]
+            data_points = cpu_data.get("data_points", [])
             
-            for point in capacity_data.get("data_points", []):
-                cpu_util = point.get("cpu_utilization_percentage", 0)
-                memory_util = point.get("memory_utilization_percentage", 0)
+            if data_points:
+                cpu_values = [point.get("cpu_utilization_percentage", 0) for point in data_points]
+                avg_cpu_util = sum(cpu_values) / len(cpu_values)
+                target_cpu_util = self.industry_benchmarks["cpu_utilization_target"]
                 
-                if cpu_util > 0:
-                    cpu_utilization_data.append(cpu_util)
-                if memory_util > 0:
-                    memory_utilization_data.append(memory_util)
+                # Score based on how close to target
+                if abs(avg_cpu_util - target_cpu_util) <= 5:  # Within 5%
+                    cpu_score = 100.0
+                elif abs(avg_cpu_util - target_cpu_util) <= 10:  # Within 10%
+                    cpu_score = 80.0
+                elif abs(avg_cpu_util - target_cpu_util) <= 20:  # Within 20%
+                    cpu_score = 60.0
+                else:
+                    cpu_score = 40.0
+                
+                resource_scores.append(cpu_score)
+                scores["scoring_details"]["cpu_utilization"] = {
+                    "current": avg_cpu_util,
+                    "benchmark": target_cpu_util,
+                    "score": cpu_score,
+                    "performance": "excellent" if cpu_score >= 90 else "good" if cpu_score >= 70 else "needs_improvement"
+                }
+        
+        # Memory utilization scoring
+        if "cluster_memory_utilization" in container_insights:
+            memory_data = container_insights["cluster_memory_utilization"]
+            data_points = memory_data.get("data_points", [])
             
-            if cpu_utilization_data:
-                avg_cpu_util = statistics.mean(cpu_utilization_data)
-                utilization_benchmarks["cpu_utilization"] = self._compare_to_benchmark(
-                    avg_cpu_util, "cpu_utilization_percentage"
-                )
-            
-            if memory_utilization_data:
-                avg_memory_util = statistics.mean(memory_utilization_data)
-                utilization_benchmarks["memory_utilization"] = self._compare_to_benchmark(
-                    avg_memory_util, "memory_utilization_percentage"
-                )
+            if data_points:
+                memory_values = [point.get("memory_utilization_percentage", 0) for point in data_points]
+                avg_memory_util = sum(memory_values) / len(memory_values)
+                target_memory_util = self.industry_benchmarks["memory_utilization_target"]
+                
+                # Score based on how close to target
+                if abs(avg_memory_util - target_memory_util) <= 5:  # Within 5%
+                    memory_score = 100.0
+                elif abs(avg_memory_util - target_memory_util) <= 10:  # Within 10%
+                    memory_score = 80.0
+                elif abs(avg_memory_util - target_memory_util) <= 20:  # Within 20%
+                    memory_score = 60.0
+                else:
+                    memory_score = 40.0
+                
+                resource_scores.append(memory_score)
+                scores["scoring_details"]["memory_utilization"] = {
+                    "current": avg_memory_util,
+                    "benchmark": target_memory_util,
+                    "score": memory_score,
+                    "performance": "excellent" if memory_score >= 90 else "good" if memory_score >= 70 else "needs_improvement"
+                }
         
-        # Calculate overall utilization score
-        cpu_score = utilization_benchmarks.get("cpu_utilization", {}).get("performance_score", 0)
-        memory_score = utilization_benchmarks.get("memory_utilization", {}).get("performance_score", 0)
+        # Operational efficiency scoring
+        operational_scores = []
         
-        if cpu_score > 0 and memory_score > 0:
-            utilization_benchmarks["overall_utilization_score"] = (cpu_score + memory_score) / 2
-        
-        return utilization_benchmarks
-    
-    async def _benchmark_efficiency(self, cluster_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Benchmark efficiency metrics"""
-        
-        efficiency_benchmarks = {
-            "resource_efficiency": {},
-            "waste_percentage": {},
-            "cost_efficiency": {},
-            "overall_efficiency_score": 0.0
-        }
-        
-        # Calculate waste percentage
-        # This would typically come from waste analytics
-        estimated_waste_percentage = 20.0  # Placeholder
-        
-        efficiency_benchmarks["waste_percentage"] = self._compare_to_benchmark(
-            estimated_waste_percentage, "waste_percentage", lower_is_better=True
-        )
-        
-        # Calculate efficiency score
-        # This would typically come from utilization analytics
-        estimated_efficiency_score = 65.0  # Placeholder
-        
-        efficiency_benchmarks["resource_efficiency"] = self._compare_to_benchmark(
-            estimated_efficiency_score, "efficiency_score"
-        )
-        
-        return efficiency_benchmarks
-    
-    async def _benchmark_density(self, cluster_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Benchmark density metrics"""
-        
-        density_benchmarks = {
-            "pods_per_node": {},
-            "container_density": {},
-            "resource_density": {},
-            "density_optimization_score": 0.0
-        }
-        
-        # Calculate pods per node
-        k8s_resources = cluster_data.get("kubernetes_resources", {})
-        total_pods = len(k8s_resources.get("pods", []))
-        
+        # Node pool configuration
         node_pools = cluster_data.get("node_pools", [])
-        total_nodes = sum(pool.get("count", 0) for pool in node_pools)
-        
-        if total_nodes > 0:
-            pods_per_node = total_pods / total_nodes
-            density_benchmarks["pods_per_node"] = self._compare_to_benchmark(
-                pods_per_node, "pods_per_node"
-            )
-        
-        # Calculate container density
-        total_containers = 0
-        pods = k8s_resources.get("pods", [])
-        for pod in pods:
-            total_containers += len(pod.get("containers", []))
-        
-        if total_nodes > 0:
-            containers_per_node = total_containers / total_nodes
-            density_benchmarks["container_density"] = self._compare_to_benchmark(
-                containers_per_node, "container_density"
-            )
-        
-        return density_benchmarks
-    
-    async def _benchmark_performance(self, cluster_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Benchmark performance metrics"""
-        
-        performance_benchmarks = {
-            "pod_health_score": 0.0,
-            "deployment_success_rate": 0.0,
-            "resource_allocation_efficiency": 0.0,
-            "overall_performance_score": 0.0
-        }
-        
-        # Calculate pod health score
-        k8s_resources = cluster_data.get("kubernetes_resources", {})
-        pods = k8s_resources.get("pods", [])
-        
-        if pods:
-            healthy_pods = len([pod for pod in pods if pod.get("status") == "Running"])
-            pod_health_score = (healthy_pods / len(pods)) * 100
-            performance_benchmarks["pod_health_score"] = pod_health_score
-        
-        # Calculate deployment success rate
-        deployments = k8s_resources.get("deployments", [])
-        
-        if deployments:
-            successful_deployments = 0
-            for deployment in deployments:
-                replicas = deployment.get("replicas", 0)
-                ready_replicas = deployment.get("ready_replicas", 0)
-                if replicas > 0 and ready_replicas == replicas:
-                    successful_deployments += 1
+        if node_pools:
+            # Check for auto-scaling
+            auto_scaling_enabled = any(pool.get("auto_scaling_enabled", False) for pool in node_pools)
+            auto_scaling_score = 100.0 if auto_scaling_enabled else 50.0
+            operational_scores.append(auto_scaling_score)
             
-            deployment_success_rate = (successful_deployments / len(deployments)) * 100
-            performance_benchmarks["deployment_success_rate"] = deployment_success_rate
-        
-        # Calculate overall performance score
-        scores = [
-            performance_benchmarks["pod_health_score"],
-            performance_benchmarks["deployment_success_rate"]
-        ]
-        
-        if scores:
-            performance_benchmarks["overall_performance_score"] = statistics.mean([s for s in scores if s > 0])
-        
-        return performance_benchmarks
-    
-    async def _compare_to_industry(self, analysis: Dict[str, Any]) -> Dict[str, Any]:
-        """Compare cluster metrics to industry standards"""
-        
-        industry_comparison = {
-            "overall_industry_ranking": "",
-            "strong_areas": [],
-            "improvement_areas": [],
-            "industry_position": {},
-            "peer_comparison": {}
-        }
-        
-        # Collect all benchmark scores
-        benchmark_scores = []
-        
-        # Cost benchmarks
-        cost_benchmarks = analysis.get("cost_benchmarks", {})
-        for metric, benchmark in cost_benchmarks.items():
-            if isinstance(benchmark, dict) and "performance_score" in benchmark:
-                benchmark_scores.append(benchmark["performance_score"])
-        
-        # Utilization benchmarks
-        utilization_benchmarks = analysis.get("utilization_benchmarks", {})
-        overall_util_score = utilization_benchmarks.get("overall_utilization_score", 0)
-        if overall_util_score > 0:
-            benchmark_scores.append(overall_util_score)
-        
-        # Efficiency benchmarks
-        efficiency_benchmarks = analysis.get("efficiency_benchmarks", {})
-        for metric, benchmark in efficiency_benchmarks.items():
-            if isinstance(benchmark, dict) and "performance_score" in benchmark:
-                benchmark_scores.append(benchmark["performance_score"])
-        
-        # Calculate overall industry ranking
-        if benchmark_scores:
-            avg_score = statistics.mean(benchmark_scores)
-            
-            if avg_score >= 85:
-                industry_comparison["overall_industry_ranking"] = "Top 10%"
-            elif avg_score >= 75:
-                industry_comparison["overall_industry_ranking"] = "Top 25%"
-            elif avg_score >= 50:
-                industry_comparison["overall_industry_ranking"] = "Average"
-            elif avg_score >= 25:
-                industry_comparison["overall_industry_ranking"] = "Below Average"
-            else:
-                industry_comparison["overall_industry_ranking"] = "Bottom 25%"
-        
-        # Identify strong areas and improvement areas
-        for category, benchmarks in [
-            ("cost", cost_benchmarks),
-            ("utilization", utilization_benchmarks),
-            ("efficiency", efficiency_benchmarks)
-        ]:
-            category_scores = []
-            for metric, benchmark in benchmarks.items():
-                if isinstance(benchmark, dict) and "performance_score" in benchmark:
-                    category_scores.append(benchmark["performance_score"])
-            
-            if category_scores:
-                avg_category_score = statistics.mean(category_scores)
-                if avg_category_score >= 75:
-                    industry_comparison["strong_areas"].append({
-                        "area": category,
-                        "score": avg_category_score,
-                        "description": f"Performing well in {category} metrics"
-                    })
-                elif avg_category_score < 50:
-                    industry_comparison["improvement_areas"].append({
-                        "area": category,
-                        "score": avg_category_score,
-                        "description": f"Below average performance in {category} metrics"
-                    })
-        
-        return industry_comparison
-    
-    async def _assess_best_practices(self, analysis: Dict[str, Any]) -> Dict[str, Any]:
-        """Assess adherence to best practices"""
-        
-        best_practices_assessment = {
-            "overall_best_practices_score": 0.0,
-            "best_practices_compliance": {},
-            "recommendations": [],
-            "compliance_gaps": []
-        }
-        
-        compliance_scores = []
-        
-        # CPU utilization best practice
-        utilization_benchmarks = analysis.get("utilization_benchmarks", {})
-        cpu_benchmark = utilization_benchmarks.get("cpu_utilization", {})
-        cpu_value = cpu_benchmark.get("actual_value", 0)
-        
-        target_cpu = self.best_practices["target_cpu_utilization"]
-        cpu_compliance = max(0, 100 - abs(cpu_value - target_cpu))
-        compliance_scores.append(cpu_compliance)
-        
-        best_practices_assessment["best_practices_compliance"]["cpu_utilization"] = {
-            "score": cpu_compliance,
-            "target": target_cpu,
-            "actual": cpu_value,
-            "compliant": abs(cpu_value - target_cpu) <= 10
-        }
-        
-        # Memory utilization best practice
-        memory_benchmark = utilization_benchmarks.get("memory_utilization", {})
-        memory_value = memory_benchmark.get("actual_value", 0)
-        
-        target_memory = self.best_practices["target_memory_utilization"]
-        memory_compliance = max(0, 100 - abs(memory_value - target_memory))
-        compliance_scores.append(memory_compliance)
-        
-        best_practices_assessment["best_practices_compliance"]["memory_utilization"] = {
-            "score": memory_compliance,
-            "target": target_memory,
-            "actual": memory_value,
-            "compliant": abs(memory_value - target_memory) <= 10
-        }
-        
-        # Efficiency best practice
-        efficiency_benchmarks = analysis.get("efficiency_benchmarks", {})
-        efficiency_benchmark = efficiency_benchmarks.get("resource_efficiency", {})
-        efficiency_value = efficiency_benchmark.get("actual_value", 0)
-        
-        min_efficiency = self.best_practices["min_efficiency_score"]
-        efficiency_compliance = min(100, (efficiency_value / min_efficiency) * 100)
-        compliance_scores.append(efficiency_compliance)
-        
-        best_practices_assessment["best_practices_compliance"]["efficiency_score"] = {
-            "score": efficiency_compliance,
-            "target": min_efficiency,
-            "actual": efficiency_value,
-            "compliant": efficiency_value >= min_efficiency
-        }
-        
-        # Calculate overall best practices score
-        if compliance_scores:
-            best_practices_assessment["overall_best_practices_score"] = statistics.mean(compliance_scores)
-        
-        # Generate recommendations
-        for practice, compliance in best_practices_assessment["best_practices_compliance"].items():
-            if not compliance["compliant"]:
-                best_practices_assessment["recommendations"].append(
-                    f"Improve {practice}: target {compliance['target']}, current {compliance['actual']:.1f}"
-                )
-        
-        return best_practices_assessment
-    
-    async def _identify_improvement_opportunities(self, analysis: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Identify specific improvement opportunities"""
-        
-        opportunities = []
-        
-        # Cost improvement opportunities
-        cost_benchmarks = analysis.get("cost_benchmarks", {})
-        for metric, benchmark in cost_benchmarks.items():
-            if isinstance(benchmark, dict):
-                performance_score = benchmark.get("performance_score", 0)
-                if performance_score < 50:  # Below average
-                    opportunities.append({
-                        "area": "cost_optimization",
-                        "metric": metric,
-                        "current_score": performance_score,
-                        "improvement_potential": "high",
-                        "recommendation": f"Optimize {metric} - currently below industry average",
-                        "priority": "high" if performance_score < 25 else "medium"
-                    })
-        
-        # Utilization improvement opportunities
-        utilization_benchmarks = analysis.get("utilization_benchmarks", {})
-        overall_util_score = utilization_benchmarks.get("overall_utilization_score", 0)
-        
-        if overall_util_score < 60:
-            opportunities.append({
-                "area": "utilization_optimization",
-                "metric": "overall_utilization",
-                "current_score": overall_util_score,
-                "improvement_potential": "high",
-                "recommendation": "Improve resource utilization through right-sizing and optimization",
-                "priority": "high"
-            })
-        
-        # Efficiency improvement opportunities
-        efficiency_benchmarks = analysis.get("efficiency_benchmarks", {})
-        for metric, benchmark in efficiency_benchmarks.items():
-            if isinstance(benchmark, dict):
-                performance_score = benchmark.get("performance_score", 0)
-                if performance_score < 60:
-                    opportunities.append({
-                        "area": "efficiency_optimization",
-                        "metric": metric,
-                        "current_score": performance_score,
-                        "improvement_potential": "medium",
-                        "recommendation": f"Improve {metric} through waste reduction and optimization",
-                        "priority": "medium"
-                    })
-        
-        # Sort by priority and score
-        priority_order = {"high": 3, "medium": 2, "low": 1}
-        opportunities.sort(key=lambda x: (priority_order.get(x["priority"], 0), -x["current_score"]), reverse=True)
-        
-        return opportunities[:10]  # Top 10 opportunities
-    
-    def _calculate_benchmarking_score(self, analysis: Dict[str, Any]) -> float:
-        """Calculate overall benchmarking score"""
-        
-        scores = []
-        
-        # Cost benchmarking scores
-        cost_benchmarks = analysis.get("cost_benchmarks", {})
-        for benchmark in cost_benchmarks.values():
-            if isinstance(benchmark, dict) and "performance_score" in benchmark:
-                scores.append(benchmark["performance_score"])
-        
-        # Utilization benchmarking scores
-        utilization_benchmarks = analysis.get("utilization_benchmarks", {})
-        util_score = utilization_benchmarks.get("overall_utilization_score", 0)
-        if util_score > 0:
-            scores.append(util_score)
-        
-        # Efficiency benchmarking scores
-        efficiency_benchmarks = analysis.get("efficiency_benchmarks", {})
-        for benchmark in efficiency_benchmarks.values():
-            if isinstance(benchmark, dict) and "performance_score" in benchmark:
-                scores.append(benchmark["performance_score"])
-        
-        # Performance benchmarking scores
-        performance_benchmarks = analysis.get("performance_benchmarks", {})
-        perf_score = performance_benchmarks.get("overall_performance_score", 0)
-        if perf_score > 0:
-            scores.append(perf_score)
-        
-        # Calculate weighted average
-        if scores:
-            return statistics.mean(scores)
-        
-        return 0.0
-    
-    def _compare_to_benchmark(self, actual_value: float, benchmark_key: str, 
-                             lower_is_better: bool = False) -> Dict[str, Any]:
-        """Compare actual value to industry benchmark"""
-        
-        benchmark = self.industry_benchmarks.get(benchmark_key, {})
-        
-        if not benchmark:
-            return {
-                "actual_value": actual_value,
-                "benchmark_not_available": True,
-                "performance_score": 50  # Neutral score
+            scores["scoring_details"]["auto_scaling"] = {
+                "enabled": auto_scaling_enabled,
+                "score": auto_scaling_score,
+                "performance": "excellent" if auto_scaling_score >= 90 else "needs_improvement"
             }
         
-        p50 = benchmark.get("p50", 0)
-        p75 = benchmark.get("p75", 0)
-        p90 = benchmark.get("p90", 0)
+        # Calculate final scores
+        if cost_scores:
+            scores["cost_efficiency_score"] = sum(cost_scores) / len(cost_scores)
         
-        # Calculate performance score
-        if lower_is_better:
-            # For metrics where lower is better (like waste percentage)
-            if actual_value <= benchmark.get("p10", 0):
-                performance_score = 95
-                percentile_ranking = "Top 10%"
-            elif actual_value <= benchmark.get("p25", p50 * 0.5):
-                performance_score = 85
-                percentile_ranking = "Top 25%"
-            elif actual_value <= p50:
-                performance_score = 70
-                percentile_ranking = "Above Average"
-            elif actual_value <= p75:
-                performance_score = 50
-                percentile_ranking = "Average"
-            else:
-                performance_score = 25
-                percentile_ranking = "Below Average"
-        else:
-            # For metrics where higher is better
-            if actual_value >= p90:
-                performance_score = 95
-                percentile_ranking = "Top 10%"
-            elif actual_value >= p75:
-                performance_score = 85
-                percentile_ranking = "Top 25%"
-            elif actual_value >= p50:
-                performance_score = 70
-                percentile_ranking = "Above Average"
-            elif actual_value >= benchmark.get("p25", p50 * 0.75):
-                performance_score = 50
-                percentile_ranking = "Average"
-            else:
-                performance_score = 25
-                percentile_ranking = "Below Average"
+        if resource_scores:
+            scores["resource_efficiency_score"] = sum(resource_scores) / len(resource_scores)
         
-        return {
-            "actual_value": actual_value,
-            "industry_p50": p50,
-            "industry_p75": p75,
-            "industry_p90": p90,
-            "performance_score": performance_score,
-            "percentile_ranking": percentile_ranking,
-            "variance_from_median": ((actual_value - p50) / p50) * 100 if p50 > 0 else 0
-        }
+        if operational_scores:
+            scores["operational_efficiency_score"] = sum(operational_scores) / len(operational_scores)
+        
+        # Overall score
+        all_scores = [
+            scores["cost_efficiency_score"],
+            scores["resource_efficiency_score"],
+            scores["operational_efficiency_score"]
+        ]
+        
+        valid_scores = [score for score in all_scores if score > 0]
+        if valid_scores:
+            scores["overall_score"] = sum(valid_scores) / len(valid_scores)
+        
+        return scores
     
-    def _parse_vm_specs(self, vm_size: str) -> Tuple[int, int]:
-        """Parse VM size to get CPU cores and memory GB"""
+    async def _compare_with_industry(self, cluster_data: Dict[str, Any], 
+                                   node_rg_costs: Dict[str, Any]) -> Dict[str, Any]:
+        """Compare with industry benchmarks"""
         
-        vm_specs = {
-            "Standard_D2s_v3": (2, 8),
-            "Standard_D4s_v3": (4, 16),
-            "Standard_D8s_v3": (8, 32),
-            "Standard_D16s_v3": (16, 64),
-            "Standard_B2s": (2, 4),
-            "Standard_B4ms": (4, 16),
-            "Standard_F4s_v2": (4, 8),
-            "Standard_F8s_v2": (8, 16),
+        comparison = {
+            "cost_metrics": {},
+            "efficiency_metrics": {},
+            "performance_summary": {
+                "better_than_industry": [],
+                "meets_industry_standard": [],
+                "below_industry_standard": []
+            }
         }
         
-        return vm_specs.get(vm_size, (2, 8))  # Default 2 cores, 8GB
+        total_cost = node_rg_costs.get("total_cost", 0.0)
+        k8s_resources = cluster_data.get("kubernetes_resources", {})
+        pods = k8s_resources.get("pods", [])
+        
+        # Cost per pod comparison
+        if pods and total_cost > 0:
+            cost_per_pod = total_cost / len(pods)
+            benchmark = self.industry_benchmarks["cost_per_pod_monthly"]
+            
+            comparison["cost_metrics"]["cost_per_pod"] = {
+                "current": cost_per_pod,
+                "industry_benchmark": benchmark,
+                "difference": cost_per_pod - benchmark,
+                "percentage_diff": ((cost_per_pod - benchmark) / benchmark) * 100,
+                "performance": "better" if cost_per_pod < benchmark else "worse"
+            }
+            
+            if cost_per_pod <= benchmark * 0.9:  # 10% better
+                comparison["performance_summary"]["better_than_industry"].append("cost_per_pod")
+            elif cost_per_pod <= benchmark * 1.1:  # Within 10%
+                comparison["performance_summary"]["meets_industry_standard"].append("cost_per_pod")
+            else:
+                comparison["performance_summary"]["below_industry_standard"].append("cost_per_pod")
+        
+        # Resource utilization comparison
+        raw_metrics = cluster_data.get("raw_metrics", {})
+        container_insights = raw_metrics.get("container_insights_data", {})
+        
+        # CPU utilization
+        if "cluster_cpu_utilization" in container_insights:
+            cpu_data = container_insights["cluster_cpu_utilization"]
+            data_points = cpu_data.get("data_points", [])
+            
+            if data_points:
+                cpu_values = [point.get("cpu_utilization_percentage", 0) for point in data_points]
+                avg_cpu_util = sum(cpu_values) / len(cpu_values)
+                benchmark = self.industry_benchmarks["cpu_utilization_target"]
+                
+                comparison["efficiency_metrics"]["cpu_utilization"] = {
+                    "current": avg_cpu_util,
+                    "industry_benchmark": benchmark,
+                    "difference": avg_cpu_util - benchmark,
+                    "performance": "better" if abs(avg_cpu_util - benchmark) <= 5 else "needs_improvement"
+                }
+                
+                if abs(avg_cpu_util - benchmark) <= 5:  # Within 5%
+                    comparison["performance_summary"]["meets_industry_standard"].append("cpu_utilization")
+                elif avg_cpu_util < benchmark - 5:  # Under-utilized
+                    comparison["performance_summary"]["below_industry_standard"].append("cpu_utilization")
+                else:  # Over-utilized
+                    comparison["performance_summary"]["below_industry_standard"].append("cpu_utilization")
+        
+        # Memory utilization
+        if "cluster_memory_utilization" in container_insights:
+            memory_data = container_insights["cluster_memory_utilization"]
+            data_points = memory_data.get("data_points", [])
+            
+            if data_points:
+                memory_values = [point.get("memory_utilization_percentage", 0) for point in data_points]
+                avg_memory_util = sum(memory_values) / len(memory_values)
+                benchmark = self.industry_benchmarks["memory_utilization_target"]
+                
+                comparison["efficiency_metrics"]["memory_utilization"] = {
+                    "current": avg_memory_util,
+                    "industry_benchmark": benchmark,
+                    "difference": avg_memory_util - benchmark,
+                    "performance": "better" if abs(avg_memory_util - benchmark) <= 5 else "needs_improvement"
+                }
+                
+                if abs(avg_memory_util - benchmark) <= 5:  # Within 5%
+                    comparison["performance_summary"]["meets_industry_standard"].append("memory_utilization")
+                elif avg_memory_util < benchmark - 5:  # Under-utilized
+                    comparison["performance_summary"]["below_industry_standard"].append("memory_utilization")
+                else:  # Over-utilized
+                    comparison["performance_summary"]["below_industry_standard"].append("memory_utilization")
+        
+        return comparison
+    
+    async def _assess_optimization_potential(self, cluster_data: Dict[str, Any], 
+                                           node_rg_costs: Dict[str, Any]) -> Dict[str, Any]:
+        """Assess optimization potential"""
+        
+        potential = {
+            "cost_optimization_potential": 0.0,
+            "resource_optimization_potential": 0.0,
+            "operational_optimization_potential": 0.0,
+            "overall_optimization_potential": 0.0,
+            "priority_areas": [],
+            "quick_wins": [],
+            "strategic_initiatives": []
+        }
+        
+        total_cost = node_rg_costs.get("total_cost", 0.0)
+        
+        # Cost optimization potential
+        by_service = node_rg_costs.get("by_service", {})
+        
+        cost_optimization_score = 0.0
+        
+        # Check for spot instance potential
+        vm_cost = by_service.get("Virtual Machines", {}).get("cost", 0.0)
+        if vm_cost > 0:
+            spot_potential = vm_cost * 0.7  # 70% potential savings
+            cost_optimization_score += (spot_potential / total_cost) * 100
+            
+            potential["quick_wins"].append({
+                "opportunity": "Implement spot instances",
+                "potential_savings": spot_potential,
+                "effort": "low",
+                "timeline": "immediate"
+            })
+        
+        # Check for storage optimization
+        storage_services = ["Storage", "Managed Disks"]
+        storage_cost = sum(by_service.get(service, {}).get("cost", 0.0) for service in storage_services)
+        if storage_cost > 0:
+            storage_potential = storage_cost * 0.3  # 30% potential savings
+            cost_optimization_score += (storage_potential / total_cost) * 100
+            
+            potential["quick_wins"].append({
+                "opportunity": "Optimize storage tiers",
+                "potential_savings": storage_potential,
+                "effort": "medium",
+                "timeline": "short-term"
+            })
+        
+        potential["cost_optimization_potential"] = min(cost_optimization_score, 100.0)
+        
+        # Resource optimization potential
+        raw_metrics = cluster_data.get("raw_metrics", {})
+        container_insights = raw_metrics.get("container_insights_data", {})
+        
+        resource_optimization_score = 0.0
+        
+        # CPU optimization
+        if "cluster_cpu_utilization" in container_insights:
+            cpu_data = container_insights["cluster_cpu_utilization"]
+            data_points = cpu_data.get("data_points", [])
+            
+            if data_points:
+                cpu_values = [point.get("cpu_utilization_percentage", 0) for point in data_points]
+                avg_cpu_util = sum(cpu_values) / len(cpu_values)
+                target_cpu_util = self.industry_benchmarks["cpu_utilization_target"]
+                
+                if avg_cpu_util < target_cpu_util - 10:  # More than 10% below target
+                    resource_optimization_score += 30.0
+                    potential["priority_areas"].append("cpu_utilization")
+                elif avg_cpu_util > target_cpu_util + 10:  # More than 10% above target
+                    resource_optimization_score += 20.0
+                    potential["strategic_initiatives"].append({
+                        "initiative": "Scale up CPU capacity",
+                        "rationale": "High CPU utilization detected",
+                        "effort": "high",
+                        "timeline": "medium-term"
+                    })
+        
+        # Memory optimization
+        if "cluster_memory_utilization" in container_insights:
+            memory_data = container_insights["cluster_memory_utilization"]
+            data_points = memory_data.get("data_points", [])
+            
+            if data_points:
+                memory_values = [point.get("memory_utilization_percentage", 0) for point in data_points]
+                avg_memory_util = sum(memory_values) / len(memory_values)
+                target_memory_util = self.industry_benchmarks["memory_utilization_target"]
+                
+                if avg_memory_util < target_memory_util - 10:  # More than 10% below target
+                    resource_optimization_score += 30.0
+                    potential["priority_areas"].append("memory_utilization")
+                elif avg_memory_util > target_memory_util + 10:  # More than 10% above target
+                    resource_optimization_score += 20.0
+                    potential["strategic_initiatives"].append({
+                        "initiative": "Scale up memory capacity",
+                        "rationale": "High memory utilization detected",
+                        "effort": "high",
+                        "timeline": "medium-term"
+                    })
+        
+        potential["resource_optimization_potential"] = min(resource_optimization_score, 100.0)
+        
+        # Operational optimization potential
+        node_pools = cluster_data.get("node_pools", [])
+        operational_optimization_score = 0.0
+        
+        # Check for auto-scaling
+        auto_scaling_enabled = any(pool.get("auto_scaling_enabled", False) for pool in node_pools)
+        if not auto_scaling_enabled:
+            operational_optimization_score += 40.0
+            potential["priority_areas"].append("auto_scaling")
+            potential["quick_wins"].append({
+                "opportunity": "Enable auto-scaling",
+                "effort": "low",
+                "timeline": "immediate"
+            })
+        
+        # Check for monitoring and alerting
+        # This would need more detailed analysis
+        operational_optimization_score += 30.0  # Assume room for improvement
+        potential["strategic_initiatives"].append({
+            "initiative": "Implement comprehensive monitoring",
+            "rationale": "Improve observability and automated responses",
+            "effort": "medium",
+            "timeline": "medium-term"
+        })
+        
+        potential["operational_optimization_potential"] = min(operational_optimization_score, 100.0)
+        
+        # Overall optimization potential
+        potential["overall_optimization_potential"] = (
+            potential["cost_optimization_potential"] +
+            potential["resource_optimization_potential"] +
+            potential["operational_optimization_potential"]
+        ) / 3
+        
+        return potential
+    
+    async def _assess_finops_maturity(self, cluster_data: Dict[str, Any], 
+                                    node_rg_costs: Dict[str, Any]) -> Dict[str, Any]:
+        """Assess FinOps maturity level"""
+        
+        maturity = {
+            "overall_maturity_level": "crawl",
+            "maturity_score": 0.0,
+            "dimension_scores": {
+                "cost_visibility": 0.0,
+                "cost_allocation": 0.0,
+                "cost_optimization": 0.0,
+                "governance": 0.0,
+                "automation": 0.0
+            },
+            "strengths": [],
+            "improvement_areas": [],
+            "next_steps": []
+        }
+        
+        # Cost visibility assessment
+        visibility_score = 0.0
+        
+        # Check if cost data is available
+        if "error" not in node_rg_costs:
+            visibility_score += 30.0
+            maturity["strengths"].append("Cost data collection implemented")
+        
+        # Check for cost breakdown
+        if node_rg_costs.get("by_service") and node_rg_costs.get("by_resource_type"):
+            visibility_score += 40.0
+            maturity["strengths"].append("Cost breakdown by service and resource type")
+        
+        # Check for daily cost tracking
+        if node_rg_costs.get("daily_breakdown"):
+            visibility_score += 30.0
+            maturity["strengths"].append("Daily cost tracking available")
+        
+        maturity["dimension_scores"]["cost_visibility"] = visibility_score
+        
+        # Cost allocation assessment
+        allocation_score = 0.0
+        
+        # Check for resource tagging
+        k8s_resources = cluster_data.get("kubernetes_resources", {})
+        namespaces = k8s_resources.get("namespaces", [])
+        
+        if namespaces:
+            # Check if namespaces have labels for cost allocation
+            labeled_namespaces = [ns for ns in namespaces if ns.get("labels", {})]
+            if labeled_namespaces:
+                allocation_score += 40.0
+                maturity["strengths"].append("Namespace labeling for cost allocation")
+        
+        # Check for workload cost attribution
+        deployments = k8s_resources.get("deployments", [])
+        if deployments:
+            allocation_score += 30.0
+            maturity["strengths"].append("Workload-level cost attribution")
+        
+        # Check for node pool cost allocation
+        node_pools = cluster_data.get("node_pools", [])
+        if node_pools:
+            allocation_score += 30.0
+            maturity["strengths"].append("Node pool cost allocation")
+        
+        maturity["dimension_scores"]["cost_allocation"] = allocation_score
+        
+        # Cost optimization assessment
+        optimization_score = 0.0
+        
+        # Check for spot instance usage
+        spot_usage = any(pool.get("scale_set_priority") == "Spot" for pool in node_pools)
+        if spot_usage:
+            optimization_score += 30.0
+            maturity["strengths"].append("Spot instance usage implemented")
+        else:
+            maturity["improvement_areas"].append("Implement spot instances")
+        
+        # Check for auto-scaling
+        auto_scaling = any(pool.get("auto_scaling_enabled", False) for pool in node_pools)
+        if auto_scaling:
+            optimization_score += 30.0
+            maturity["strengths"].append("Auto-scaling enabled")
+        else:
+            maturity["improvement_areas"].append("Enable auto-scaling")
+        
+        # Check for resource requests/limits
+        pods = k8s_resources.get("pods", [])
+        pods_with_requests = [pod for pod in pods if pod.get("resource_requests", {})]
+        if pods_with_requests:
+            optimization_score += 40.0
+            maturity["strengths"].append("Resource requests/limits configured")
+        else:
+            maturity["improvement_areas"].append("Configure resource requests/limits")
+        
+        maturity["dimension_scores"]["cost_optimization"] = optimization_score
+        
+        # Governance assessment
+        governance_score = 0.0
+        
+        # Check for resource quotas
+        resource_quotas = []
+        for ns in namespaces:
+            if ns.get("resource_quotas"):
+                resource_quotas.extend(ns["resource_quotas"])
+        
+        if resource_quotas:
+            governance_score += 40.0
+            maturity["strengths"].append("Resource quotas implemented")
+        else:
+            maturity["improvement_areas"].append("Implement resource quotas")
+        
+        # Check for limit ranges
+        limit_ranges = []
+        for ns in namespaces:
+            if ns.get("limit_ranges"):
+                limit_ranges.extend(ns["limit_ranges"])
+        
+        if limit_ranges:
+            governance_score += 30.0
+            maturity["strengths"].append("Limit ranges configured")
+        else:
+            maturity["improvement_areas"].append("Configure limit ranges")
+        
+        # Check for policy enforcement
+        governance_score += 30.0  # Assume some basic policies
+        
+        maturity["dimension_scores"]["governance"] = governance_score
+        
+        # Automation assessment
+        automation_score = 0.0
+        
+        # Check for auto-scaling (already checked)
+        if auto_scaling:
+            automation_score += 40.0
+        
+        # Check for monitoring
+        raw_metrics = cluster_data.get("raw_metrics", {})
+        if raw_metrics.get("container_insights_data"):
+            automation_score += 30.0
+            maturity["strengths"].append("Monitoring and metrics collection")
+        
+        # Assume some level of automation
+        automation_score += 30.0
+        
+        maturity["dimension_scores"]["automation"] = automation_score
+        
+        # Calculate overall maturity
+        all_scores = list(maturity["dimension_scores"].values())
+        maturity["maturity_score"] = sum(all_scores) / len(all_scores)
+        
+        # Determine maturity level
+        if maturity["maturity_score"] >= 80:
+            maturity["overall_maturity_level"] = "run"
+        elif maturity["maturity_score"] >= 60:
+            maturity["overall_maturity_level"] = "walk"
+        else:
+            maturity["overall_maturity_level"] = "crawl"
+        
+        # Generate next steps
+        if maturity["overall_maturity_level"] == "crawl":
+            maturity["next_steps"] = [
+                "Implement comprehensive cost visibility",
+                "Set up basic cost allocation and tagging",
+                "Enable auto-scaling and basic optimization"
+            ]
+        elif maturity["overall_maturity_level"] == "walk":
+            maturity["next_steps"] = [
+                "Implement advanced cost optimization",
+                "Set up automated governance policies",
+                "Enable predictive scaling and forecasting"
+            ]
+        else:
+            maturity["next_steps"] = [
+                "Implement ML-driven optimization",
+                "Set up advanced FinOps automation",
+                "Enable continuous optimization loops"
+            ]
+        
+        return maturity
+    
+    async def _generate_benchmark_recommendations(self, analysis: Dict[str, Any]) -> List[str]:
+        """Generate benchmarking recommendations"""
+        
+        recommendations = []
+        
+        performance_scores = analysis.get("performance_scores", {})
+        industry_comparison = analysis.get("industry_comparison", {})
+        optimization_potential = analysis.get("optimization_potential", {})
+        maturity_assessment = analysis.get("maturity_assessment", {})
+        
+        # Performance-based recommendations
+        overall_score = performance_scores.get("overall_score", 0.0)
+        
+        if overall_score < 60:
+            recommendations.append("PRIORITY: Overall performance below industry standards - implement immediate optimization")
+        elif overall_score < 80:
+            recommendations.append("FOCUS: Performance approaching industry standards - continue optimization efforts")
+        else:
+            recommendations.append("MAINTAIN: Performance exceeds industry standards - focus on continuous improvement")
+        
+        # Industry comparison recommendations
+        performance_summary = industry_comparison.get("performance_summary", {})
+        
+        below_standard = performance_summary.get("below_industry_standard", [])
+        if below_standard:
+            recommendations.append(f"Address underperforming areas: {', '.join(below_standard)}")
+        
+        # Optimization potential recommendations
+        overall_potential = optimization_potential.get("overall_optimization_potential", 0.0)
+        
+        if overall_potential > 60:
+            recommendations.append(f"HIGH POTENTIAL: {overall_potential:.1f}% optimization potential identified")
+        elif overall_potential > 30:
+            recommendations.append(f"MODERATE POTENTIAL: {overall_potential:.1f}% optimization potential identified")
+        
+        # Quick wins
+        quick_wins = optimization_potential.get("quick_wins", [])
+        if quick_wins:
+            recommendations.append(f"Implement {len(quick_wins)} quick wins for immediate impact")
+        
+        # Maturity-based recommendations
+        maturity_level = maturity_assessment.get("overall_maturity_level", "crawl")
+        
+        if maturity_level == "crawl":
+            recommendations.append("FOUNDATION: Focus on building basic FinOps capabilities")
+        elif maturity_level == "walk":
+            recommendations.append("ADVANCEMENT: Enhance existing capabilities with automation")
+        else:
+            recommendations.append("OPTIMIZATION: Implement advanced FinOps practices")
+        
+        # Improvement areas
+        improvement_areas = maturity_assessment.get("improvement_areas", [])
+        if improvement_areas:
+            recommendations.append(f"Address improvement areas: {', '.join(improvement_areas[:3])}")
+        
+        return recommendations

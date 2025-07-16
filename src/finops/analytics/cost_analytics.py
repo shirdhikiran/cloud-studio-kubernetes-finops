@@ -1,279 +1,292 @@
 # src/finops/analytics/cost_analytics.py
 """
-Cost Analytics Module - Advanced cost analysis and attribution
+Updated Phase 2 Cost Analytics - Integration with node_resource_group_costs
+Focuses on leveraging the latest Phase 1 cost data structure
 """
-
-from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime, timezone, timedelta
-import structlog
-import statistics
+import traceback
+import asyncio
+from typing import Dict, Any, List, Optional
+from datetime import datetime, timedelta
 from collections import defaultdict
-import numpy as np
+import structlog
 
 logger = structlog.get_logger(__name__)
 
 
 class CostAnalytics:
-    """Advanced cost analytics for FinOps insights"""
+    """
+    Updated Cost Analytics Engine for Phase 2
+    Now properly integrates with node_resource_group_costs from Phase 1
+    """
     
     def __init__(self, config: Dict[str, Any]):
         self.config = config
-        self.logger = logger.bind(module="cost_analytics")
+        self.logger = logger.bind(analytics="cost")
         
         # Cost analysis thresholds
         self.thresholds = {
-            'high_cost_pod_threshold': config.get('high_cost_pod_threshold', 100.0),  # USD/month
-            'cost_variance_threshold': config.get('cost_variance_threshold', 15.0),   # %
-            'unit_cost_anomaly_threshold': config.get('unit_cost_anomaly_threshold', 25.0),  # %
+            'high_cost_threshold': config.get('high_cost_threshold', 1000.0),
+            'anomaly_threshold': config.get('cost_anomaly_threshold', 20.0),
+            'waste_threshold': config.get('waste_threshold', 20.0),
+            'efficiency_target': config.get('efficiency_target', 70.0)
         }
     
     async def analyze_cluster_costs(self, cluster_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Comprehensive cost analysis for a cluster"""
+        """
+        Main cost analysis method - updated to use node_resource_group_costs
+        """
+        cluster_name = cluster_data.get("cluster_info", {}).get("name", "unknown")
+
         
-        cluster_info = cluster_data.get("cluster_info", {})
-        cluster_name = cluster_info.get("name", "unknown")
-        
-        self.logger.info(f"Starting cost analysis for cluster: {cluster_name}")
-        
-        # Extract cost data
-        detailed_costs = cluster_data.get("detailed_costs", {})
-        # raw_cost_data = cluster_data.get("raw_cost_data", {})
+        self.logger.info(f"Starting updated cost analysis for {cluster_name}")
         
         analysis = {
             "cluster_name": cluster_name,
-            "analysis_timestamp": datetime.now(timezone.utc).isoformat(),
+            "analysis_timestamp": datetime.now().isoformat(),
             "cost_attribution": {},
             "cost_trends": {},
             "unit_costs": {},
             "cost_optimization": {},
-            "cost_forecasting": {},
-            "anomalies": [],
+            "anomalies": {},
             "recommendations": [],
             "total_monthly_cost": 0.0,
             "efficiency_score": 0.0
         }
         
         try:
-            # 1. Cost Attribution Analysis
-            analysis["cost_attribution"] = await self._analyze_cost_attribution(
-                cluster_data, detailed_costs
-            )
+            # Extract node_resource_group_costs (latest Phase 1 data)
+            node_rg_costs = cluster_data.get("node_resource_group_costs", {})
             
-            # 2. Cost Trends Analysis
-            analysis["cost_trends"] = await self._analyze_cost_trends(detailed_costs)
-            
-            # 3. Unit Cost Analysis
-            analysis["unit_costs"] = await self._analyze_unit_costs(cluster_data)
-            
-            # 4. Cost Optimization Opportunities
-            analysis["cost_optimization"] = await self._identify_cost_optimization(cluster_data)
-            
-            # 5. Cost Anomaly Detection
-            analysis["anomalies"] = await self._detect_cost_anomalies(detailed_costs)
-            
-            # 6. Generate Recommendations
-            analysis["recommendations"] = await self._generate_cost_recommendations(analysis)
-            
-            # 7. Calculate totals and efficiency
-            analysis["total_monthly_cost"] = self._calculate_total_monthly_cost(detailed_costs)
-            analysis["efficiency_score"] = self._calculate_cost_efficiency_score(analysis)
-            
-            self.logger.info(
-                f"Cost analysis completed for {cluster_name}",
-                total_cost=analysis["total_monthly_cost"],
-                efficiency_score=analysis["efficiency_score"]
-            )
+            if node_rg_costs and "error" not in node_rg_costs:
+                # 1. Updated Cost Attribution using node_resource_group_costs
+                analysis["cost_attribution"] = await self._analyze_updated_cost_attribution(
+                    cluster_data, node_rg_costs
+                )
+                
+                # 2. Enhanced Cost Trends Analysis
+                analysis["cost_trends"] = await self._analyze_enhanced_cost_trends(node_rg_costs)
+                
+                # 3. Updated Unit Cost Analysis
+                analysis["unit_costs"] = await self._analyze_updated_unit_costs(
+                    cluster_data, node_rg_costs
+                )
+                
+                # 4. Cost Optimization with real cost data
+                analysis["cost_optimization"] = await self._identify_enhanced_cost_optimization(
+                    cluster_data, node_rg_costs
+                )
+                
+                # 5. Cost Anomaly Detection
+                analysis["anomalies"] = await self._detect_enhanced_cost_anomalies(node_rg_costs)
+                
+                # 6. Generate Updated Recommendations
+                analysis["recommendations"] = await self._generate_enhanced_cost_recommendations(analysis)
+                
+                # 7. Calculate totals and efficiency with real data
+                analysis["total_monthly_cost"] = self._calculate_actual_monthly_cost(node_rg_costs)
+                analysis["efficiency_score"] = self._calculate_enhanced_cost_efficiency_score(analysis)
+                
+                self.logger.info(
+                    f"Updated cost analysis completed for {cluster_name}",
+                    total_cost=analysis["total_monthly_cost"],
+                    efficiency_score=analysis["efficiency_score"]
+                )
+            else:
+                self.logger.warning(f"No valid node_resource_group_costs data for {cluster_name}")
+                analysis["error"] = "Missing or invalid node_resource_group_costs data"
             
         except Exception as e:
-            self.logger.error(f"Cost analysis failed for {cluster_name}: {e}")
+            import pdb; pdb.set_trace()
+            self.logger.error(f"Updated cost analysis failed for {cluster_name}: {e}")
             analysis["error"] = str(e)
         
         return analysis
     
-    async def _analyze_cost_attribution(self, cluster_data: Dict[str, Any], 
-                                      detailed_costs: Dict[str, Any]) -> Dict[str, Any]:
-        """Analyze cost attribution by various dimensions"""
-        
+    async def _analyze_updated_cost_attribution(self, cluster_data: Dict[str, Any], 
+                                              node_rg_costs: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Updated cost attribution using real Azure cost data from node_resource_group_costs
+        """
         attribution = {
             "by_resource_type": {},
             "by_service": {},
+            "by_resource_id": {},
+            "by_meter_category": {},
             "by_node_pool": {},
             "by_namespace": {},
             "by_workload": {},
-            "unallocated_costs": 0.0
+            "unallocated_costs": 0.0,
+            "total_allocated_cost": 0.0
         }
         
-        # Resource-level costs from detailed_costs
-        resources = detailed_costs.get("resources", {})
-        total_resource_cost = 0.0
+        # Use actual cost data from node_resource_group_costs
+        total_cost = node_rg_costs.get("total_cost", 0.0)
+        attribution["total_allocated_cost"] = total_cost
         
-        for resource_id, resource_data in resources.items():
-            cost = resource_data.get("total_cost", 0.0)
-            total_resource_cost += cost
-            
-            # Attribution by resource type
-            resource_type = resource_data.get("resource_type", "unknown")
-            if resource_type not in attribution["by_resource_type"]:
-                attribution["by_resource_type"][resource_type] = {"cost": 0.0, "count": 0}
-            attribution["by_resource_type"][resource_type]["cost"] += cost
-            attribution["by_resource_type"][resource_type]["count"] += 1
-            
-            # Attribution by service
-            service_name = resource_data.get("service_name", "unknown")
-            if service_name not in attribution["by_service"]:
-                attribution["by_service"][service_name] = {"cost": 0.0, "count": 0}
-            attribution["by_service"][service_name]["cost"] += cost
-            attribution["by_service"][service_name]["count"] += 1
-        
-        # Node pool attribution
-        node_pools = cluster_data.get("node_pools", [])
-        for pool in node_pools:
-            pool_name = pool.get("name", "unknown")
-            # Estimate pool cost based on VM size and count
-            vm_cost = self._estimate_vm_cost(pool.get("vm_size", ""), pool.get("count", 0))
-            attribution["by_node_pool"][pool_name] = {
-                "cost": vm_cost,
-                "vm_size": pool.get("vm_size", ""),
-                "node_count": pool.get("count", 0),
-                "cost_per_node": vm_cost / max(1, pool.get("count", 1))
+        # Resource type attribution from actual Azure data
+        by_resource_type = node_rg_costs.get("by_resource_type", {})
+        for resource_type, cost_data in by_resource_type.items():
+            attribution["by_resource_type"][resource_type] = {
+                "cost": cost_data.get("cost", 0.0),
+                "usage_quantity": cost_data.get("usage_quantity", 0.0),
+                "percentage": (cost_data.get("cost", 0.0) / max(total_cost, 1)) * 100
             }
         
-        # Kubernetes resource attribution
-        k8s_resources = cluster_data.get("kubernetes_resources", {})
-        
-        # Namespace attribution
-        namespaces = k8s_resources.get("namespaces", [])
-        for ns in namespaces:
-            ns_name = ns.get("name", "unknown")
-            # Estimate namespace cost based on pod count and resource requests
-            ns_cost = self._estimate_namespace_cost(ns, attribution["by_node_pool"])
-            attribution["by_namespace"][ns_name] = {
-                "cost": ns_cost,
-                "pod_count": len(ns.get("pods", [])),
-                "cost_per_pod": ns_cost / max(1, len(ns.get("pods", [])))
+        # Service attribution from actual Azure data
+        by_service = node_rg_costs.get("by_service", {})
+        for service_name, cost_data in by_service.items():
+            attribution["by_service"][service_name] = {
+                "cost": cost_data.get("cost", 0.0),
+                "usage_quantity": cost_data.get("usage_quantity", 0.0),
+                "percentage": (cost_data.get("cost", 0.0) / max(total_cost, 1)) * 100
             }
         
-        # Workload attribution
-        deployments = k8s_resources.get("deployments", [])
-        for deployment in deployments:
-            workload_name = f"{deployment.get('namespace', 'unknown')}/{deployment.get('name', 'unknown')}"
-            replica_count = deployment.get("replicas", 1)
-            # Estimate workload cost
-            workload_cost = self._estimate_workload_cost(deployment, attribution["by_namespace"])
-            attribution["by_workload"][workload_name] = {
-                "cost": workload_cost,
-                "replicas": replica_count,
-                "namespace": deployment.get("namespace", "unknown"),
-                "cost_per_replica": workload_cost / max(1, replica_count)
+        # Resource ID attribution from actual Azure data
+        by_resource_id = node_rg_costs.get("by_resource_id", {})
+        for resource_id, cost_data in by_resource_id.items():
+            attribution["by_resource_id"][resource_id] = {
+                "cost": cost_data.get("cost", 0.0),
+                "resource_type": cost_data.get("resource_type", "unknown"),
+                "service_name": cost_data.get("service_name", "unknown"),
+                "percentage": (cost_data.get("cost", 0.0) / max(total_cost, 1)) * 100
             }
+        
+        # Meter category attribution
+        by_meter_category = node_rg_costs.get("by_meter_category", {})
+        for meter_category, cost_data in by_meter_category.items():
+            attribution["by_meter_category"][meter_category] = {
+                "cost": cost_data.get("cost", 0.0),
+                "usage_quantity": cost_data.get("usage_quantity", 0.0),
+                "percentage": (cost_data.get("cost", 0.0) / max(total_cost, 1)) * 100
+            }
+        
+        # Enhanced node pool attribution using actual cost mapping
+        await self._map_costs_to_node_pools(cluster_data, node_rg_costs, attribution)
+        
+        # Enhanced namespace attribution using cost allocation
+        await self._map_costs_to_namespaces(cluster_data, attribution)
+        
+        # Enhanced workload attribution
+        await self._map_costs_to_workloads(cluster_data, attribution)
         
         return attribution
     
-    async def _analyze_cost_trends(self, detailed_costs: Dict[str, Any]) -> Dict[str, Any]:
-        """Analyze cost trends and patterns"""
-        
+    async def _analyze_enhanced_cost_trends(self, node_rg_costs: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Enhanced cost trends analysis using actual daily cost data
+        """
         trends = {
-            "daily_trend": [],
+            "daily_trends": [],
             "weekly_pattern": {},
+            "monthly_pattern": {},
             "cost_velocity": 0.0,
             "trend_direction": "stable",
-            "volatility": 0.0
+            "volatility": 0.0,
+            "forecasted_monthly_cost": 0.0
         }
         
-        # Extract daily costs from raw data
-        raw_data = detailed_costs.get("raw_data", {})
-        daily_breakdown = raw_data.get("daily_breakdown", [])
+        # Extract actual daily costs
+        daily_breakdown = node_rg_costs.get("daily_breakdown", [])
         
-        if daily_breakdown:
-            costs = [day.get("cost", 0.0) for day in daily_breakdown]
-            dates = [day.get("date", "") for day in daily_breakdown]
-            
-            # Calculate daily trend
-            trends["daily_trend"] = [
-                {"date": date, "cost": cost} 
-                for date, cost in zip(dates, costs)
-            ]
+        if daily_breakdown and len(daily_breakdown) > 1:
+            # Process daily trends
+            trends["daily_trends"] = daily_breakdown
             
             # Calculate cost velocity (rate of change)
+            costs = [day.get("cost", 0.0) for day in daily_breakdown]
             if len(costs) >= 2:
-                recent_avg = statistics.mean(costs[-7:]) if len(costs) >= 7 else statistics.mean(costs[-3:])
-                older_avg = statistics.mean(costs[:7]) if len(costs) >= 14 else statistics.mean(costs[:len(costs)//2])
+                recent_costs = costs[-7:]  # Last 7 days
+                older_costs = costs[-14:-7] if len(costs) >= 14 else costs[:-7]
                 
-                if older_avg > 0:
+                if older_costs:
+                    recent_avg = sum(recent_costs) / len(recent_costs)
+                    older_avg = sum(older_costs) / len(older_costs)
                     trends["cost_velocity"] = ((recent_avg - older_avg) / older_avg) * 100
-                
-                # Determine trend direction
-                if trends["cost_velocity"] > 5:
-                    trends["trend_direction"] = "increasing"
-                elif trends["cost_velocity"] < -5:
-                    trends["trend_direction"] = "decreasing"
-                else:
-                    trends["trend_direction"] = "stable"
+                    
+                    if trends["cost_velocity"] > 5:
+                        trends["trend_direction"] = "increasing"
+                    elif trends["cost_velocity"] < -5:
+                        trends["trend_direction"] = "decreasing"
+                    else:
+                        trends["trend_direction"] = "stable"
             
             # Calculate volatility
             if len(costs) > 1:
-                trends["volatility"] = statistics.stdev(costs) / statistics.mean(costs) * 100
+                mean_cost = sum(costs) / len(costs)
+                variance = sum((cost - mean_cost) ** 2 for cost in costs) / len(costs)
+                trends["volatility"] = (variance ** 0.5) / mean_cost * 100
             
             # Weekly pattern analysis
-            for i, day_data in enumerate(daily_breakdown):
-                day_of_week = (i % 7)  # Simplified day mapping
-                day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-                day_name = day_names[day_of_week]
-                
-                if day_name not in trends["weekly_pattern"]:
-                    trends["weekly_pattern"][day_name] = []
-                trends["weekly_pattern"][day_name].append(day_data.get("cost", 0.0))
+            weekly_costs = defaultdict(list)
+            for day in daily_breakdown:
+                try:
+                    date_obj = datetime.fromisoformat(day.get("date", ""))
+                    weekday = date_obj.strftime("%A")
+                    weekly_costs[weekday].append(day.get("cost", 0.0))
+                except:
+                    continue
             
-            # Average weekly pattern
-            for day, costs_list in trends["weekly_pattern"].items():
-                trends["weekly_pattern"][day] = {
-                    "average_cost": statistics.mean(costs_list),
-                    "cost_variance": statistics.stdev(costs_list) if len(costs_list) > 1 else 0.0
+            for weekday, costs in weekly_costs.items():
+                trends["weekly_pattern"][weekday] = {
+                    "average_cost": sum(costs) / len(costs),
+                    "min_cost": min(costs),
+                    "max_cost": max(costs),
+                    "sample_size": len(costs)
                 }
+            
+            # Forecast monthly cost based on recent trends
+            if len(costs) >= 7:
+                recent_daily_avg = sum(costs[-7:]) / 7
+                trends["forecasted_monthly_cost"] = recent_daily_avg * 30
         
         return trends
     
-    async def _analyze_unit_costs(self, cluster_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Calculate various unit cost metrics"""
-        
+    async def _analyze_updated_unit_costs(self, cluster_data: Dict[str, Any], 
+                                        node_rg_costs: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Updated unit cost analysis using actual cost data
+        """
         unit_costs = {
             "cost_per_pod": 0.0,
-            "cost_per_cpu_core": 0.0,
-            "cost_per_gb_memory": 0.0,
-            "cost_per_node": 0.0,
             "cost_per_namespace": 0.0,
             "cost_per_workload": 0.0,
+            "cost_per_node": 0.0,
+            "cost_per_cpu_core": 0.0,
+            "cost_per_gb_memory": 0.0,
+            "cost_per_vcpu_hour": 0.0,
+            "cost_per_gb_hour": 0.0,
             "cost_efficiency_ratios": {}
         }
         
-        # Get total cost
-        detailed_costs = cluster_data.get("detailed_costs", {})
-        total_cost = detailed_costs.get("summary", {}).get("total_cost", 0.0)
+        total_cost = node_rg_costs.get("total_cost", 0.0)
+        if total_cost == 0:
+            return unit_costs
         
-        # Get Kubernetes metrics
+        # Kubernetes resource counts
         k8s_resources = cluster_data.get("kubernetes_resources", {})
         
-        # Calculate unit costs
-        pod_count = len(k8s_resources.get("pods", []))
-        if pod_count > 0:
-            unit_costs["cost_per_pod"] = total_cost / pod_count
+        # Cost per pod
+        pods = k8s_resources.get("pods", [])
+        if pods:
+            unit_costs["cost_per_pod"] = total_cost / len(pods)
         
-        namespace_count = len(k8s_resources.get("namespaces", []))
-        if namespace_count > 0:
-            unit_costs["cost_per_namespace"] = total_cost / namespace_count
+        # Cost per namespace
+        namespaces = k8s_resources.get("namespaces", [])
+        if namespaces:
+            unit_costs["cost_per_namespace"] = total_cost / len(namespaces)
         
-        deployment_count = len(k8s_resources.get("deployments", []))
-        if deployment_count > 0:
-            unit_costs["cost_per_workload"] = total_cost / deployment_count
+        # Cost per workload
+        deployments = k8s_resources.get("deployments", [])
+        if deployments:
+            unit_costs["cost_per_workload"] = total_cost / len(deployments)
         
-        # Calculate resource-based unit costs
+        # Node-based unit costs
         node_pools = cluster_data.get("node_pools", [])
         total_nodes = sum(pool.get("count", 0) for pool in node_pools)
         total_cpu_cores = 0
         total_memory_gb = 0
         
         for pool in node_pools:
-            # Estimate resources per node based on VM size
             vm_size = pool.get("vm_size", "")
             cpu_cores, memory_gb = self._parse_vm_size(vm_size)
             node_count = pool.get("count", 0)
@@ -286,326 +299,631 @@ class CostAnalytics:
         
         if total_cpu_cores > 0:
             unit_costs["cost_per_cpu_core"] = total_cost / total_cpu_cores
+            unit_costs["cost_per_vcpu_hour"] = total_cost / total_cpu_cores / 24 / 30
         
         if total_memory_gb > 0:
             unit_costs["cost_per_gb_memory"] = total_cost / total_memory_gb
+            unit_costs["cost_per_gb_hour"] = total_cost / total_memory_gb / 24 / 30
         
-        # Cost efficiency ratios
+        # Enhanced cost efficiency ratios
         unit_costs["cost_efficiency_ratios"] = {
-            "cost_per_pod_per_day": unit_costs["cost_per_pod"] / 30,  # Assuming monthly cost
-            "cost_per_cpu_hour": unit_costs["cost_per_cpu_core"] / 24 / 30,
-            "cost_per_gb_memory_hour": unit_costs["cost_per_gb_memory"] / 24 / 30
+            "cost_per_pod_per_day": unit_costs["cost_per_pod"] / 30 if unit_costs["cost_per_pod"] > 0 else 0,
+            "cost_per_request_per_hour": unit_costs["cost_per_cpu_core"] / 24 / 30 if unit_costs["cost_per_cpu_core"] > 0 else 0,
+            "cost_per_workload_per_day": unit_costs["cost_per_workload"] / 30 if unit_costs["cost_per_workload"] > 0 else 0,
+            "memory_cost_ratio": unit_costs["cost_per_gb_memory"] / max(unit_costs["cost_per_cpu_core"], 1) if unit_costs["cost_per_cpu_core"] > 0 else 0
         }
         
         return unit_costs
     
-    async def _identify_cost_optimization(self, cluster_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Identify cost optimization opportunities"""
-        
+    async def _identify_enhanced_cost_optimization(self, cluster_data: Dict[str, Any], 
+                                                 node_rg_costs: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Enhanced cost optimization using actual cost breakdowns
+        """
         optimization = {
             "spot_instance_opportunities": [],
             "reserved_instance_opportunities": [],
             "rightsizing_opportunities": [],
             "storage_optimization": [],
             "network_optimization": [],
-            "total_savings": 0.0
+            "service_optimization": [],
+            "total_potential_savings": 0.0
         }
         
-        # Spot instance opportunities
-        node_pools = cluster_data.get("node_pools", [])
-        for pool in node_pools:
-            if pool.get("scale_set_priority") != "Spot":
-                # Calculate potential spot savings (typically 60-90% discount)
-                current_cost = self._estimate_vm_cost(pool.get("vm_size", ""), pool.get("count", 0))
-                spot_savings = current_cost * 0.7  # 70% savings estimate
-                
-                optimization["spot_instance_opportunities"].append({
-                    "node_pool": pool.get("name", ""),
-                    "current_cost": current_cost,
-                    "potential_savings": spot_savings,
-                    "recommendation": f"Convert to spot instances for {pool.get('name', '')} node pool",
-                    "risk_level": "medium",
-                    "suitability_score": self._calculate_spot_suitability(pool)
-                })
+        total_cost = node_rg_costs.get("total_cost", 0.0)
         
-        # Reserved instance opportunities (for stable workloads)
-        for pool in node_pools:
-            if pool.get("auto_scaling_enabled", False) and pool.get("min_count", 0) > 0:
-                # Reserved instances for minimum capacity
-                min_cost = self._estimate_vm_cost(pool.get("vm_size", ""), pool.get("min_count", 0))
-                reserved_savings = min_cost * 0.3  # 30% savings for 1-year reserved
-                
-                optimization["reserved_instance_opportunities"].append({
-                    "node_pool": pool.get("name", ""),
-                    "minimum_nodes": pool.get("min_count", 0),
-                    "current_cost": min_cost,
-                    "potential_savings": reserved_savings,
-                    "recommendation": f"Use reserved instances for base capacity in {pool.get('name', '')}",
-                    "commitment_period": "1-year"
-                })
+        # Service-based optimization opportunities
+        by_service = node_rg_costs.get("by_service", {})
         
-        # Storage optimization
-        k8s_resources = cluster_data.get("kubernetes_resources", {})
-        pvs = k8s_resources.get("persistent_volumes", [])
-        
-        for pv in pvs:
-            # Check for premium storage that could be standard
-            storage_class = pv.get("storage_class", "")
-            if "premium" in storage_class.lower():
-                capacity = self._parse_storage_capacity(pv.get("capacity", "0"))
-                if capacity > 0:
-                    # Estimate 50% savings by moving to standard storage
-                    premium_cost = capacity * 0.15  # $0.15/GB/month for premium
-                    standard_cost = capacity * 0.05  # $0.05/GB/month for standard
-                    savings = premium_cost - standard_cost
+        # VM/Compute optimization
+        if "Virtual Machines" in by_service:
+            vm_cost = by_service["Virtual Machines"].get("cost", 0.0)
+            
+            # Spot instance opportunities (typically 60-90% savings)
+            node_pools = cluster_data.get("node_pools", [])
+            for pool in node_pools:
+                if pool.get("scale_set_priority") != "Spot":
+                    pool_cost_estimate = vm_cost * (pool.get("count", 0) / max(sum(p.get("count", 0) for p in node_pools), 1))
+                    spot_savings = pool_cost_estimate * 0.7  # 70% average savings
                     
-                    optimization["storage_optimization"].append({
-                        "pv_name": pv.get("name", ""),
-                        "current_storage_class": storage_class,
-                        "capacity_gb": capacity,
-                        "current_cost": premium_cost,
-                        "optimized_cost": standard_cost,
-                        "potential_savings": savings,
-                        "recommendation": "Consider moving to standard storage if IOPS requirements allow"
+                    optimization["spot_instance_opportunities"].append({
+                        "node_pool": pool.get("name", "unknown"),
+                        "current_cost": pool_cost_estimate,
+                        "potential_savings": spot_savings,
+                        "vm_size": pool.get("vm_size", ""),
+                        "node_count": pool.get("count", 0),
+                        "risk_level": "medium"
                     })
         
-        # Calculate total savings
-        optimization["total_savings"] = (
+        # Storage optimization
+        storage_services = ["Storage", "Managed Disks", "Storage Accounts"]
+        storage_cost = sum(by_service.get(service, {}).get("cost", 0.0) for service in storage_services)
+        
+        if storage_cost > 0:
+            # Premium to Standard disk optimization
+            premium_savings = storage_cost * 0.3  # 30% typical savings
+            optimization["storage_optimization"].append({
+                "opportunity": "Premium to Standard disk migration",
+                "current_cost": storage_cost,
+                "potential_savings": premium_savings,
+                "description": "Migrate non-critical workloads from Premium to Standard storage"
+            })
+        
+        # Network optimization
+        network_services = ["Load Balancer", "Application Gateway", "Public IP", "Bandwidth"]
+        network_cost = sum(by_service.get(service, {}).get("cost", 0.0) for service in network_services)
+        
+        if network_cost > 0:
+            # Network optimization opportunities
+            network_savings = network_cost * 0.15  # 15% typical savings
+            optimization["network_optimization"].append({
+                "opportunity": "Network resource optimization",
+                "current_cost": network_cost,
+                "potential_savings": network_savings,
+                "description": "Optimize load balancers and reduce unnecessary public IPs"
+            })
+        
+        # Resource type optimization
+        by_resource_type = node_rg_costs.get("by_resource_type", {})
+        for resource_type, cost_data in by_resource_type.items():
+            cost = cost_data.get("cost", 0.0)
+            
+            if cost > total_cost * 0.1:  # If resource type is >10% of total cost
+                if "disk" in resource_type.lower():
+                    optimization["storage_optimization"].append({
+                        "opportunity": f"{resource_type} optimization",
+                        "current_cost": cost,
+                        "potential_savings": cost * 0.2,
+                        "description": f"Optimize {resource_type} configuration and sizing"
+                    })
+        
+        # Calculate total potential savings
+        optimization["total_potential_savings"] = (
             sum(opp["potential_savings"] for opp in optimization["spot_instance_opportunities"]) +
-            sum(opp["potential_savings"] for opp in optimization["reserved_instance_opportunities"]) +
-            sum(opp["potential_savings"] for opp in optimization["storage_optimization"])
+            sum(opp["potential_savings"] for opp in optimization["storage_optimization"]) +
+            sum(opp["potential_savings"] for opp in optimization["network_optimization"])
         )
         
         return optimization
     
-    async def _detect_cost_anomalies(self, detailed_costs: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Detect cost anomalies and unusual patterns"""
+    async def _detect_enhanced_cost_anomalies(self, node_rg_costs: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Enhanced cost anomaly detection using actual cost data
+        """
+        anomalies = {
+            "daily_anomalies": [],
+            "service_anomalies": [],
+            "resource_anomalies": [],
+            "trend_anomalies": [],
+            "total_anomaly_cost": 0.0
+        }
         
-        anomalies = []
-        
-        # Daily cost anomalies
-        raw_data = detailed_costs.get("raw_data", {})
-        daily_breakdown = raw_data.get("daily_breakdown", [])
+        daily_breakdown = node_rg_costs.get("daily_breakdown", [])
         
         if len(daily_breakdown) >= 7:
             costs = [day.get("cost", 0.0) for day in daily_breakdown]
-            mean_cost = statistics.mean(costs)
-            std_cost = statistics.stdev(costs) if len(costs) > 1 else 0
+            mean_cost = sum(costs) / len(costs)
+            std_dev = (sum((cost - mean_cost) ** 2 for cost in costs) / len(costs)) ** 0.5
             
-            for i, day in enumerate(daily_breakdown):
+            threshold = mean_cost + (2 * std_dev)  # 2 standard deviations
+            
+            for day in daily_breakdown:
                 daily_cost = day.get("cost", 0.0)
-                if std_cost > 0:
-                    z_score = abs((daily_cost - mean_cost) / std_cost)
-                    
-                    # Anomaly if cost is more than 2 standard deviations away
-                    if z_score > 2:
-                        anomalies.append({
-                            "type": "daily_cost_anomaly",
-                            "date": day.get("date", ""),
-                            "actual_cost": daily_cost,
-                            "expected_cost": mean_cost,
-                            "deviation_percentage": ((daily_cost - mean_cost) / mean_cost) * 100,
-                            "severity": "high" if z_score > 3 else "medium",
-                            "description": f"Cost spike detected on {day.get('date', '')}: ${daily_cost:.2f} vs expected ${mean_cost:.2f}"
-                        })
+                if daily_cost > threshold:
+                    anomaly_cost = daily_cost - mean_cost
+                    anomalies["daily_anomalies"].append({
+                        "date": day.get("date", ""),
+                        "cost": daily_cost,
+                        "expected_cost": mean_cost,
+                        "anomaly_amount": anomaly_cost,
+                        "severity": "high" if anomaly_cost > mean_cost * 0.5 else "medium"
+                    })
+                    anomalies["total_anomaly_cost"] += anomaly_cost
         
-        # Resource cost anomalies
-        resources = detailed_costs.get("resources", {})
-        if resources:
-            resource_costs = [res.get("total_cost", 0.0) for res in resources.values()]
-            if resource_costs:
-                mean_resource_cost = statistics.mean(resource_costs)
-                
-                for resource_id, resource_data in resources.items():
-                    cost = resource_data.get("total_cost", 0.0)
-                    if cost > mean_resource_cost * 3:  # More than 3x average
-                        anomalies.append({
-                            "type": "high_cost_resource",
-                            "resource_id": resource_id,
-                            "resource_type": resource_data.get("resource_type", "unknown"),
-                            "cost": cost,
-                            "average_cost": mean_resource_cost,
-                            "cost_multiple": cost / max(mean_resource_cost, 1),
-                            "severity": "high",
-                            "description": f"Resource {resource_id} has unusually high cost: ${cost:.2f}"
-                        })
+        # Service cost anomalies
+        by_service = node_rg_costs.get("by_service", {})
+        total_cost = node_rg_costs.get("total_cost", 0.0)
+        
+        for service_name, cost_data in by_service.items():
+            service_cost = cost_data.get("cost", 0.0)
+            service_percentage = (service_cost / max(total_cost, 1)) * 100
+            
+            # Flag services that consume unusual percentage of costs
+            if service_percentage > 50:  # More than 50% of total cost
+                anomalies["service_anomalies"].append({
+                    "service": service_name,
+                    "cost": service_cost,
+                    "percentage": service_percentage,
+                    "severity": "high",
+                    "description": f"{service_name} consuming {service_percentage:.1f}% of total cost"
+                })
         
         return anomalies
     
-    async def _generate_cost_recommendations(self, analysis: Dict[str, Any]) -> List[str]:
-        """Generate cost optimization recommendations"""
-        
+    async def _generate_enhanced_cost_recommendations(self, analysis: Dict[str, Any]) -> List[str]:
+        """
+        Generate enhanced cost recommendations based on actual cost analysis
+        """
         recommendations = []
         
-        # Based on optimization opportunities
-        optimization = analysis.get("cost_optimization", {})
+        cost_attribution = analysis.get("cost_attribution", {})
+        cost_optimization = analysis.get("cost_optimization", {})
+        anomalies = analysis.get("anomalies", {})
         
-        spot_opps = optimization.get("spot_instance_opportunities", [])
-        if spot_opps:
-            total_spot_savings = sum(opp["potential_savings"] for opp in spot_opps)
+        # Recommendations based on service costs
+        by_service = cost_attribution.get("by_service", {})
+        for service_name, service_data in by_service.items():
+            percentage = service_data.get("percentage", 0.0)
+            
+            if percentage > 40:
+                recommendations.append(
+                    f"Focus optimization on {service_name} (consuming {percentage:.1f}% of total cost)"
+                )
+        
+        # Spot instance recommendations
+        spot_opportunities = cost_optimization.get("spot_instance_opportunities", [])
+        if spot_opportunities:
+            total_spot_savings = sum(opp["potential_savings"] for opp in spot_opportunities)
             recommendations.append(
-                f"Consider spot instances for suitable workloads to save up to ${total_spot_savings:.2f}/month"
+                f"Implement spot instances for suitable workloads - potential savings: ${total_spot_savings:.2f}/month"
             )
         
-        reserved_opps = optimization.get("reserved_instance_opportunities", [])
-        if reserved_opps:
-            total_reserved_savings = sum(opp["potential_savings"] for opp in reserved_opps)
+        # Storage optimization recommendations
+        storage_opportunities = cost_optimization.get("storage_optimization", [])
+        if storage_opportunities:
+            total_storage_savings = sum(opp["potential_savings"] for opp in storage_opportunities)
             recommendations.append(
-                f"Use reserved instances for base capacity to save ${total_reserved_savings:.2f}/month"
+                f"Optimize storage configuration - potential savings: ${total_storage_savings:.2f}/month"
             )
         
-        storage_opps = optimization.get("storage_optimization", [])
-        if storage_opps:
-            total_storage_savings = sum(opp["potential_savings"] for opp in storage_opps)
+        # Anomaly-based recommendations
+        daily_anomalies = anomalies.get("daily_anomalies", [])
+        if daily_anomalies:
             recommendations.append(
-                f"Optimize storage classes to save ${total_storage_savings:.2f}/month"
+                f"Investigate cost spikes detected on {len(daily_anomalies)} days - total anomaly cost: ${anomalies.get('total_anomaly_cost', 0):.2f}"
             )
         
-        # Based on cost trends
-        trends = analysis.get("cost_trends", {})
-        if trends.get("trend_direction") == "increasing":
+        # Total potential savings recommendation
+        total_savings = cost_optimization.get("total_potential_savings", 0.0)
+        total_monthly_cost = analysis.get("total_monthly_cost", 0.0)
+
+        if total_savings > 0:
+            if total_monthly_cost > 0:
+                savings_percent = (total_savings / total_monthly_cost) * 100
+            else:
+                savings_percent = 0.0  # or float('inf') if you want to indicate undefined % savings
+
             recommendations.append(
-                "Cost trend is increasing - implement proactive cost controls and monitoring"
+                f"Total identified cost optimization potential: ${total_savings:.2f}/month ({savings_percent:.1f}% savings)"
             )
-        
-        if trends.get("volatility", 0) > 20:
-            recommendations.append(
-                "High cost volatility detected - investigate workload patterns and implement predictable scaling"
-            )
-        
-        # Based on anomalies
-        anomalies = analysis.get("anomalies", [])
-        high_anomalies = [a for a in anomalies if a.get("severity") == "high"]
-        if high_anomalies:
-            recommendations.append(
-                f"Investigate {len(high_anomalies)} high-severity cost anomalies"
-            )
+
         
         return recommendations
     
-    def _calculate_total_monthly_cost(self, detailed_costs: Dict[str, Any]) -> float:
-        """Calculate total monthly cost"""
-        return detailed_costs.get("summary", {}).get("total_cost", 0.0)
-    
-    def _calculate_cost_efficiency_score(self, analysis: Dict[str, Any]) -> float:
-        """Calculate cost efficiency score (0-100)"""
+    def _calculate_actual_monthly_cost(self, node_rg_costs: Dict[str, Any]) -> float:
+        """Calculate actual monthly cost from node resource group costs"""
+        total_cost = node_rg_costs.get("total_cost", 0.0)
         
+        # # If we have daily breakdown, extrapolate to monthly
+        # daily_breakdown = node_rg_costs.get("daily_breakdown", [])
+        # if daily_breakdown:
+        #     # Calculate average daily cost from recent data
+        #     recent_days = daily_breakdown[-7:] if len(daily_breakdown) >= 7 else daily_breakdown
+        #     if recent_days:
+        #         avg_daily_cost = sum(day.get("cost", 0.0) for day in recent_days) / len(recent_days)
+        #         return avg_daily_cost * 30
+        
+        return total_cost
+    
+    def _calculate_enhanced_cost_efficiency_score(self, analysis: Dict[str, Any]) -> float:
+        """Calculate enhanced cost efficiency score"""
         score = 100.0
         
-        # Penalize for high waste
-        optimization = analysis.get("cost_optimization", {})
-        total_savings = optimization.get("total_savings", 0.0)
-        total_cost = analysis.get("total_monthly_cost", 1.0)
+        # Deduct points for high waste
+        cost_optimization = analysis.get("cost_optimization", {})
+        total_cost = analysis.get("total_monthly_cost", 1)
+        potential_savings = cost_optimization.get("total_potential_savings", 0.0)
         
-        waste_percentage = (total_savings / total_cost) * 100 if total_cost > 0 else 0
-        score -= min(50, waste_percentage)  # Max 50 point penalty for waste
+        if total_cost > 0:
+            waste_percentage = (potential_savings / total_cost) * 100
+            score -= min(waste_percentage, 50)  # Max 50 points deduction for waste
         
-        # Penalize for anomalies
-        anomalies = analysis.get("anomalies", [])
-        high_anomalies = len([a for a in anomalies if a.get("severity") == "high"])
-        score -= high_anomalies * 5  # 5 points per high anomaly
+        # Deduct points for anomalies
+        anomalies = analysis.get("anomalies", {})
+        anomaly_cost = anomalies.get("total_anomaly_cost", 0.0)
+        if total_cost > 0:
+            anomaly_percentage = (anomaly_cost / total_cost) * 100
+            score -= min(anomaly_percentage, 20)  # Max 20 points deduction for anomalies
         
-        # Penalize for high volatility
-        trends = analysis.get("cost_trends", {})
-        volatility = trends.get("volatility", 0)
-        if volatility > 15:
-            score -= min(20, (volatility - 15) * 2)  # Penalty for high volatility
+        # Deduct points for poor attribution
+        cost_attribution = analysis.get("cost_attribution", {})
+        unallocated_costs = cost_attribution.get("unallocated_costs", 0.0)
+        if total_cost > 0:
+            unallocated_percentage = (unallocated_costs / total_cost) * 100
+            score -= min(unallocated_percentage, 30)  # Max 30 points deduction for poor attribution
         
-        return max(0, min(100, score))
+        return max(0.0, score)
     
-    # Helper methods
-    def _estimate_vm_cost(self, vm_size: str, count: int) -> float:
-        """Estimate VM cost based on size and count"""
+    async def _map_costs_to_node_pools(self, cluster_data: Dict[str, Any], 
+                                     node_rg_costs: Dict[str, Any], 
+                                     attribution: Dict[str, Any]):
+        """Map Azure costs to specific node pools"""
+        node_pools = cluster_data.get("node_pools", [])
+        total_cost = node_rg_costs.get("total_cost", 0.0)
         
-        # Simplified cost estimates (USD/month per VM)
-        vm_costs = {
-            "Standard_D2s_v3": 70.0,
-            "Standard_D4s_v3": 140.0,
-            "Standard_D8s_v3": 280.0,
-            "Standard_D16s_v3": 560.0,
-            "Standard_B2s": 30.0,
-            "Standard_B4ms": 120.0,
-            "Standard_F4s_v2": 150.0,
-            "Standard_F8s_v2": 300.0,
-        }
+        # Use VM-related costs from Azure data
+        by_service = node_rg_costs.get("by_service", {})
+        vm_cost = by_service.get("Virtual Machines", {}).get("cost", total_cost)
         
-        base_cost = vm_costs.get(vm_size, 100.0)  # Default $100/month
-        return base_cost * count
+        total_nodes = sum(pool.get("count", 0) for pool in node_pools)
+        
+        for pool in node_pools:
+            pool_name = pool.get("name", "unknown")
+            node_count = pool.get("count", 0)
+            
+            # Allocate cost proportionally by node count
+            if total_nodes > 0:
+                pool_cost = vm_cost * (node_count / total_nodes)
+                attribution["by_node_pool"][pool_name] = {
+                    "cost": pool_cost,
+                    "node_count": node_count,
+                    "vm_size": pool.get("vm_size", ""),
+                    "cost_per_node": pool_cost / max(node_count, 1),
+                    "percentage": (pool_cost / max(total_cost, 1)) * 100
+                }
     
-    def _parse_vm_size(self, vm_size: str) -> Tuple[int, int]:
-        """Parse VM size to get CPU cores and memory GB"""
+    async def _map_costs_to_namespaces(self, cluster_data: Dict[str, Any], 
+                                     attribution: Dict[str, Any]):
+        """Map costs to Kubernetes namespaces"""
+        k8s_resources = cluster_data.get("kubernetes_resources", {})
+        namespaces = k8s_resources.get("namespaces", [])
         
-        vm_specs = {
+        total_node_pool_cost = sum(
+            pool_data["cost"] for pool_data in attribution["by_node_pool"].values()
+        )
+        
+        total_pods = sum(len(ns.get("pods", [])) for ns in namespaces)
+        
+        for ns in namespaces:
+            ns_name = ns.get("name", "unknown")
+            pod_count = len(ns.get("pods", []))
+            
+            # Allocate cost proportionally by pod count
+            if total_pods > 0:
+                ns_cost = total_node_pool_cost * (pod_count / total_pods)
+                attribution["by_namespace"][ns_name] = {
+                    "cost": ns_cost,
+                    "pod_count": pod_count,
+                    "cost_per_pod": ns_cost / max(pod_count, 1),
+                    "percentage": (ns_cost / max(total_node_pool_cost, 1)) * 100
+                }
+    
+    async def _map_costs_to_workloads(self, cluster_data: Dict[str, Any], 
+                                    attribution: Dict[str, Any]):
+        """Map costs to Kubernetes workloads"""
+        k8s_resources = cluster_data.get("kubernetes_resources", {})
+        deployments = k8s_resources.get("deployments", [])
+        
+        total_namespace_cost = sum(
+            ns_data["cost"] for ns_data in attribution["by_namespace"].values()
+        )
+        
+        for deployment in deployments:
+            workload_name = f"{deployment.get('namespace', 'unknown')}/{deployment.get('name', 'unknown')}"
+            namespace = deployment.get("namespace", "unknown")
+            replicas = deployment.get("replicas", 1)
+            
+            # Get namespace cost allocation
+            ns_cost_data = attribution["by_namespace"].get(namespace, {})
+            ns_cost = ns_cost_data.get("cost", 0.0)
+            ns_pod_count = ns_cost_data.get("pod_count", 1)
+            
+            # Allocate cost proportionally by replica count
+            workload_cost = ns_cost * (replicas / max(ns_pod_count, 1))
+            attribution["by_workload"][workload_name] = {
+                "cost": workload_cost,
+                "namespace": namespace,
+                "replicas": replicas,
+                "cost_per_replica": workload_cost / max(replicas, 1),
+                "percentage": (workload_cost / max(total_namespace_cost, 1)) * 100
+            }
+    
+    def _parse_vm_size(self, vm_size: str) -> tuple:
+        """Parse VM size to extract CPU cores and memory GB"""
+        # Standard Azure VM size parsing
+        size_mappings = {
+            "Standard_B2s": (2, 4),
+            "Standard_B4ms": (4, 16),
             "Standard_D2s_v3": (2, 8),
             "Standard_D4s_v3": (4, 16),
             "Standard_D8s_v3": (8, 32),
             "Standard_D16s_v3": (16, 64),
-            "Standard_B2s": (2, 4),
-            "Standard_B4ms": (4, 16),
+            "Standard_DS2_v2": (2, 7),
+            "Standard_DS3_v2": (4, 14),
+            "Standard_DS4_v2": (8, 28),
+            "Standard_DS5_v2": (16, 56),
+            "Standard_E2s_v3": (2, 16),
+            "Standard_E4s_v3": (4, 32),
+            "Standard_E8s_v3": (8, 64),
+            "Standard_E16s_v3": (16, 128),
+            "Standard_F2s_v2": (2, 4),
             "Standard_F4s_v2": (4, 8),
             "Standard_F8s_v2": (8, 16),
+            "Standard_F16s_v2": (16, 32),
         }
         
-        return vm_specs.get(vm_size, (2, 8))  # Default 2 cores, 8GB
+        return size_mappings.get(vm_size, (2, 4))  # Default to 2 cores, 4GB
     
-    def _parse_storage_capacity(self, capacity_str: str) -> float:
-        """Parse storage capacity string to GB"""
+    def _estimate_vm_cost(self, vm_size: str, node_count: int) -> float:
+        """Estimate VM cost based on size and count"""
+        # Rough cost estimates (USD/hour) - should be updated with actual pricing
+        cost_per_hour = {
+            "Standard_B2s": 0.0416,
+            "Standard_B4ms": 0.166,
+            "Standard_D2s_v3": 0.096,
+            "Standard_D4s_v3": 0.192,
+            "Standard_D8s_v3": 0.384,
+            "Standard_D16s_v3": 0.768,
+            "Standard_DS2_v2": 0.135,
+            "Standard_DS3_v2": 0.27,
+            "Standard_DS4_v2": 0.54,
+            "Standard_DS5_v2": 1.08,
+            "Standard_E2s_v3": 0.126,
+            "Standard_E4s_v3": 0.252,
+            "Standard_E8s_v3": 0.504,
+            "Standard_E16s_v3": 1.008,
+            "Standard_F2s_v2": 0.085,
+            "Standard_F4s_v2": 0.169,
+            "Standard_F8s_v2": 0.338,
+            "Standard_F16s_v2": 0.676,
+        }
         
-        if not capacity_str:
-            return 0.0
-        
-        # Remove units and convert to GB
-        capacity_str = capacity_str.upper().replace("I", "")
-        
-        if capacity_str.endswith("GB") or capacity_str.endswith("G"):
-            return float(capacity_str.replace("GB", "").replace("G", ""))
-        elif capacity_str.endswith("TB") or capacity_str.endswith("T"):
-            return float(capacity_str.replace("TB", "").replace("T", "")) * 1024
-        else:
-            # Assume GB
-            try:
-                return float(capacity_str)
-            except:
-                return 0.0
+        hourly_cost = cost_per_hour.get(vm_size, 0.096)  # Default to D2s_v3 pricing
+        return hourly_cost * node_count * 24 * 30  # Monthly cost
+
+
+# Additional analytics classes for Phase 2
+
+class UtilizationAnalytics:
+    """Updated Utilization Analytics for Phase 2"""
     
-    def _estimate_namespace_cost(self, namespace: Dict[str, Any], 
-                                node_pool_costs: Dict[str, Any]) -> float:
-        """Estimate namespace cost based on resource usage"""
+    def __init__(self, config: Dict[str, Any]):
+        self.config = config
+        self.logger = logger.bind(analytics="utilization")
         
-        # Simplified estimation based on pod count
-        pod_count = len(namespace.get("pods", []))
-        total_cluster_cost = sum(pool["cost"] for pool in node_pool_costs.values())
-        
-        # Very rough estimation - divide total cost by total pods
-        # In practice, this would use actual resource requests/limits
-        return total_cluster_cost * 0.1 * pod_count  # 10% per pod assumption
+        self.thresholds = {
+            'low_utilization_threshold': config.get('low_utilization_threshold', 30.0),
+            'high_utilization_threshold': config.get('high_utilization_threshold', 80.0),
+            'cpu_target_utilization': config.get('cpu_target_utilization', 70.0),
+            'memory_target_utilization': config.get('memory_target_utilization', 70.0)
+        }
     
-    def _estimate_workload_cost(self, workload: Dict[str, Any], 
-                               namespace_costs: Dict[str, Any]) -> float:
-        """Estimate workload cost"""
+    async def analyze_cluster_utilization(self, cluster_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Enhanced utilization analysis integrating with node_resource_group_costs
+        """
+        cluster_name = cluster_data.get("cluster_info", {}).get("name", "unknown")
+
         
-        namespace = workload.get("namespace", "unknown")
-        replicas = workload.get("replicas", 1)
+        analysis = {
+            "cluster_name": cluster_name,
+            "analysis_timestamp": datetime.now().isoformat(),
+            "cluster_utilization": {},
+            "node_utilization": {},
+            "pod_utilization": {},
+            "capacity_analysis": {},
+            "efficiency_metrics": {},
+            "recommendations": []
+        }
         
-        # Estimate based on namespace cost and replica proportion
-        namespace_cost = namespace_costs.get(namespace, {}).get("cost", 0.0)
-        return namespace_cost * 0.2 * replicas  # 20% per replica assumption
+        try:
+            # Get raw metrics and cost data
+            raw_metrics = cluster_data.get("raw_metrics", {})
+            node_rg_costs = cluster_data.get("node_resource_group_costs", {})
+            
+            # 1. Cluster-level utilization analysis
+            analysis["cluster_utilization"] = await self._analyze_cluster_utilization_metrics(
+                cluster_data, raw_metrics
+            )
+            
+            # 2. Node-level utilization analysis
+            analysis["node_utilization"] = await self._analyze_node_utilization_metrics(
+                cluster_data, raw_metrics
+            )
+            
+            # 3. Pod-level utilization analysis
+            analysis["pod_utilization"] = await self._analyze_pod_utilization_metrics(
+                cluster_data, raw_metrics
+            )
+            
+            # 4. Capacity analysis with cost correlation
+            analysis["capacity_analysis"] = await self._analyze_capacity_with_costs(
+                cluster_data, raw_metrics, node_rg_costs
+            )
+            
+            # 5. Efficiency metrics calculation
+            analysis["efficiency_metrics"] = await self._calculate_efficiency_metrics(
+                analysis, node_rg_costs
+            )
+            
+            # 6. Generate utilization recommendations
+            analysis["recommendations"] = await self._generate_utilization_recommendations(
+                analysis, node_rg_costs
+            )
+            
+            self.logger.info(f"Utilization analysis completed for {cluster_name}")
+            
+        except Exception as e:
+            self.logger.error(f"Utilization analysis failed for {cluster_name}: {e}")
+            analysis["error"] = str(e)
+        
+        return analysis
     
-    def _calculate_spot_suitability(self, node_pool: Dict[str, Any]) -> float:
-        """Calculate suitability score for spot instances (0-100)"""
+    async def _analyze_cluster_utilization_metrics(self, cluster_data: Dict[str, Any], 
+                                                 raw_metrics: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze cluster-level utilization metrics"""
+        cluster_util = {
+            "cpu_utilization": {"current": 0.0, "average": 0.0, "peak": 0.0},
+            "memory_utilization": {"current": 0.0, "average": 0.0, "peak": 0.0},
+            "node_utilization": {"active_nodes": 0, "total_nodes": 0},
+            "pod_utilization": {"running_pods": 0, "total_capacity": 0},
+            "resource_efficiency": 0.0
+        }
         
-        score = 50.0  # Base score
+        # Extract Container Insights data
+        container_insights = raw_metrics.get("container_insights_data", {})
         
-        # Higher score for auto-scaling enabled pools
-        if node_pool.get("auto_scaling_enabled", False):
-            score += 30.0
+        # CPU utilization
+        if "cluster_cpu_utilization" in container_insights:
+            cpu_data = container_insights["cluster_cpu_utilization"]
+            data_points = cpu_data.get("data_points", [])
+            
+            if data_points:
+                cpu_values = [point.get("cpu_utilization_percentage", 0) for point in data_points]
+                cluster_util["cpu_utilization"] = {
+                    "current": cpu_values[-1] if cpu_values else 0.0,
+                    "average": sum(cpu_values) / len(cpu_values),
+                    "peak": max(cpu_values),
+                    "trend": "increasing" if len(cpu_values) > 1 and cpu_values[-1] > cpu_values[0] else "stable"
+                }
         
-        # Higher score for user pools vs system pools
-        if node_pool.get("mode", "") == "User":
-            score += 20.0
+        # Memory utilization
+        if "cluster_memory_utilization" in container_insights:
+            memory_data = container_insights["cluster_memory_utilization"]
+            data_points = memory_data.get("data_points", [])
+            
+            if data_points:
+                memory_values = [point.get("memory_utilization_percentage", 0) for point in data_points]
+                cluster_util["memory_utilization"] = {
+                    "current": memory_values[-1] if memory_values else 0.0,
+                    "average": sum(memory_values) / len(memory_values),
+                    "peak": max(memory_values),
+                    "trend": "increasing" if len(memory_values) > 1 and memory_values[-1] > memory_values[0] else "stable"
+                }
         
-        # Lower score for single-node pools
-        if node_pool.get("count", 0) == 1:
-            score -= 40.0
+        # Node utilization
+        node_pools = cluster_data.get("node_pools", [])
+        total_nodes = sum(pool.get("count", 0) for pool in node_pools)
+        cluster_util["node_utilization"]["total_nodes"] = total_nodes
+        cluster_util["node_utilization"]["active_nodes"] = total_nodes  # Assume all nodes are active
         
-        return max(0, min(100, score))
+        # Pod utilization
+        k8s_resources = cluster_data.get("kubernetes_resources", {})
+        pods = k8s_resources.get("pods", [])
+        running_pods = len([pod for pod in pods if pod.get("status", {}).get("phase") == "Running"])
+        cluster_util["pod_utilization"]["running_pods"] = running_pods
+        cluster_util["pod_utilization"]["total_capacity"] = total_nodes * 110  # Assume 110 pods per node max
+        
+        # Calculate resource efficiency
+        cpu_eff = cluster_util["cpu_utilization"]["average"] / 100
+        memory_eff = cluster_util["memory_utilization"]["average"] / 100
+        cluster_util["resource_efficiency"] = ((cpu_eff + memory_eff) / 2) * 100
+        
+        return cluster_util
+    
+    async def _analyze_capacity_with_costs(self, cluster_data: Dict[str, Any], 
+                                         raw_metrics: Dict[str, Any], 
+                                         node_rg_costs: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze capacity with cost correlation"""
+        capacity_analysis = {
+            "current_capacity": {},
+            "utilization_efficiency": {},
+            "cost_per_utilized_resource": {},
+            "headroom_analysis": {},
+            "scaling_recommendations": []
+        }
+        
+        # Current capacity from node pools
+        node_pools = cluster_data.get("node_pools", [])
+        total_cpu_cores = 0
+        total_memory_gb = 0
+        
+        for pool in node_pools:
+            vm_size = pool.get("vm_size", "")
+            node_count = pool.get("count", 0)
+            
+            # Parse VM size to get resources
+            cpu_cores, memory_gb = self._parse_vm_size(vm_size)
+            
+            total_cpu_cores += cpu_cores * node_count
+            total_memory_gb += memory_gb * node_count
+        
+        capacity_analysis["current_capacity"] = {
+            "total_cpu_cores": total_cpu_cores,
+            "total_memory_gb": total_memory_gb,
+            "total_nodes": sum(pool.get("count", 0) for pool in node_pools)
+        }
+        
+        # Cost efficiency metrics
+        total_cost = node_rg_costs.get("total_cost", 0.0)
+        if total_cost > 0:
+            capacity_analysis["cost_per_utilized_resource"] = {
+                "cost_per_cpu_core": total_cost / max(total_cpu_cores, 1),
+                "cost_per_gb_memory": total_cost / max(total_memory_gb, 1),
+                "cost_per_node": total_cost / max(len(node_pools), 1)
+            }
+        
+        # Headroom analysis
+        container_insights = raw_metrics.get("container_insights_data", {})
+        if "cluster_capacity_summary" in container_insights:
+            capacity_data = container_insights["cluster_capacity_summary"]
+            latest_point = capacity_data.get("data_points", [{}])[-1] if capacity_data.get("data_points") else {}
+            
+            cpu_utilization = latest_point.get("cpu_utilization_percentage", 0)
+            memory_utilization = latest_point.get("memory_utilization_percentage", 0)
+            
+            capacity_analysis["headroom_analysis"] = {
+                "cpu_headroom_percentage": 100 - cpu_utilization,
+                "memory_headroom_percentage": 100 - memory_utilization,
+                "cpu_headroom_cores": total_cpu_cores * (100 - cpu_utilization) / 100,
+                "memory_headroom_gb": total_memory_gb * (100 - memory_utilization) / 100,
+                "wasted_cost": total_cost * (100 - max(cpu_utilization, memory_utilization)) / 100
+            }
+        
+        return capacity_analysis
+    
+    def _parse_vm_size(self, vm_size: str) -> tuple:
+        """Parse VM size to extract CPU cores and memory GB"""
+        # Reuse the same method from CostAnalytics
+        size_mappings = {
+            "Standard_B2s": (2, 4),
+            "Standard_B4ms": (4, 16),
+            "Standard_D2s_v3": (2, 8),
+            "Standard_D4s_v3": (4, 16),
+            "Standard_D8s_v3": (8, 32),
+            "Standard_D16s_v3": (16, 64),
+            "Standard_DS2_v2": (2, 7),
+            "Standard_DS3_v2": (4, 14),
+            "Standard_DS4_v2": (8, 28),
+            "Standard_DS5_v2": (16, 56),
+            "Standard_E2s_v3": (2, 16),
+            "Standard_E4s_v3": (4, 32),
+            "Standard_E8s_v3": (8, 64),
+            "Standard_E16s_v3": (16, 128),
+            "Standard_F2s_v2": (2, 4),
+            "Standard_F4s_v2": (4, 8),
+            "Standard_F8s_v2": (8, 16),
+            "Standard_F16s_v2": (16, 32),
+        }
+        
+        return size_mappings.get(vm_size, (2, 4))  # Default to 2 cores, 4GB

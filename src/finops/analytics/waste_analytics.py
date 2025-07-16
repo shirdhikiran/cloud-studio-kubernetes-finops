@@ -1,991 +1,973 @@
 # src/finops/analytics/waste_analytics.py
 """
-Waste Analytics Module - Identify and quantify resource waste
+Updated Phase 2 Waste Analytics - Enhanced with node_resource_group_costs
+Focus on identifying and quantifying waste using actual cost data
 """
-
-from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime, timezone, timedelta
-import structlog
-import statistics
-from collections import defaultdict
-import math
 import traceback
+import asyncio
+from typing import Dict, Any, List, Optional
+from datetime import datetime, timedelta
+from collections import defaultdict
+import structlog
+import math
 
 logger = structlog.get_logger(__name__)
 
 
 class WasteAnalytics:
-    """Advanced waste analytics for identifying and quantifying resource waste"""
+    """
+    Enhanced Waste Analytics for Phase 2
+    Identifies and quantifies waste using actual cost data from node_resource_group_costs
+    """
     
     def __init__(self, config: Dict[str, Any]):
         self.config = config
-        self.logger = logger.bind(module="waste_analytics")
+        self.logger = logger.bind(analytics="waste")
         
         # Waste detection thresholds
         self.thresholds = {
-            'idle_cpu_threshold': config.get('idle_cpu_threshold', 5.0),  # %
-            'idle_memory_threshold': config.get('idle_memory_threshold', 10.0),  # %
-            'low_utilization_threshold': config.get('low_utilization_threshold', 20.0),  # %
-            'zombie_pod_age_hours': config.get('zombie_pod_age_hours', 72),  # hours
-            'failed_pod_threshold': config.get('failed_pod_threshold', 5),  # count
-            'overprovisioning_ratio': config.get('overprovisioning_ratio', 3.0),  # times
-            'unused_storage_threshold': config.get('unused_storage_threshold', 30),  # days
+            'cpu_waste_threshold': config.get('cpu_waste_threshold', 10.0),  # % utilization
+            'memory_waste_threshold': config.get('memory_waste_threshold', 10.0),  # % utilization
+            'idle_threshold': config.get('idle_threshold', 5.0),  # % utilization
+            'overprovisioning_threshold': config.get('overprovisioning_threshold', 200.0),  # % over request
+            'zombie_threshold_days': config.get('zombie_threshold_days', 7),  # days
+            'cost_waste_threshold': config.get('cost_waste_threshold', 100.0),  # USD per month
         }
     
     async def analyze_cluster_waste(self, cluster_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Comprehensive waste analysis for a cluster"""
+        """
+        Enhanced waste analysis using actual cost data
+        """
+        cluster_name = cluster_data.get("cluster_info", {}).get("name", "unknown")
         
-        cluster_info = cluster_data.get("cluster_info", {})
-        cluster_name = cluster_info.get("name", "unknown")
-        
-        self.logger.info(f"Starting waste analysis for cluster: {cluster_name}")
+        self.logger.info(f"Starting enhanced waste analysis for {cluster_name}")
         
         analysis = {
             "cluster_name": cluster_name,
-            "analysis_timestamp": datetime.now(timezone.utc).isoformat(),
-            "idle_resources": {},
-            "zombie_workloads": {},
-            "overprovisioned_resources": {},
-            "failed_resources": {},
-            "unused_storage": {},
-            "network_waste": {},
+            "analysis_timestamp": datetime.now().isoformat(),
+            "resource_waste": {},
             "cost_waste": {},
-            "waste_summary": {},
-            "recommendations": [],
+            "zombie_resources": {},
+            "overprovisioning_analysis": {},
+            "idle_resources": {},
+            "storage_waste": {},
+            "network_waste": {},
             "total_waste_cost": 0.0,
-            "waste_percentage": 0.0
+            "waste_percentage": 0.0,
+            "recommendations": []
         }
         
         try:
-            # 1. Identify idle resources
-            analysis["idle_resources"] = await self._identify_idle_resources(cluster_data)
+            # Get cost and metrics data
+            node_rg_costs = cluster_data.get("node_resource_group_costs", {})
+            raw_metrics = cluster_data.get("raw_metrics", {})
             
-            # 2. Detect zombie workloads
-            analysis["zombie_workloads"] = await self._detect_zombie_workloads(cluster_data)
-            
-            # 3. Find overprovisioned resources
-            analysis["overprovisioned_resources"] = await self._find_overprovisioned_resources(cluster_data)
-            
-            # 4. Identify failed/problematic resources
-            analysis["failed_resources"] = await self._identify_failed_resources(cluster_data)
-            
-            # 5. Detect unused storage
-            analysis["unused_storage"] = await self._detect_unused_storage(cluster_data)
-            
-            # 6. Analyze network waste
-            analysis["network_waste"] = await self._analyze_network_waste(cluster_data)
-            
-            # 7. Quantify cost waste
-            analysis["cost_waste"] = await self._quantify_cost_waste(cluster_data, analysis)
-            
-            # 8. Generate waste summary
-            analysis["waste_summary"] = await self._generate_waste_summary(analysis)
-            
-            # 9. Generate recommendations
-            analysis["recommendations"] = await self._generate_waste_recommendations(analysis)
-            
-            # 10. Calculate totals
-            analysis["total_waste_cost"] = self._calculate_total_waste_cost(analysis)
-            analysis["waste_percentage"] = self._calculate_waste_percentage(analysis, cluster_data)
-            
-            self.logger.info(
-                f"Waste analysis completed for {cluster_name}",
-                total_waste_cost=analysis["total_waste_cost"],
-                waste_percentage=analysis["waste_percentage"]
-            )
-            
+            if node_rg_costs and "error" not in node_rg_costs:
+                # 1. Resource waste analysis with cost correlation
+                analysis["resource_waste"] = await self._analyze_resource_waste_with_costs(
+                    cluster_data, raw_metrics, node_rg_costs
+                )
+                
+                # 2. Cost-based waste analysis
+                analysis["cost_waste"] = await self._analyze_cost_waste(
+                    cluster_data, node_rg_costs
+                )
+                
+                # 3. Zombie resource detection
+                analysis["zombie_resources"] = await self._detect_zombie_resources(
+                    cluster_data, node_rg_costs
+                )
+                
+                # 4. Overprovisioning analysis
+                analysis["overprovisioning_analysis"] = await self._analyze_overprovisioning(
+                    cluster_data, raw_metrics, node_rg_costs
+                )
+                
+                # 5. Idle resource analysis
+                analysis["idle_resources"] = await self._analyze_idle_resources(
+                    cluster_data, raw_metrics, node_rg_costs
+                )
+                
+                # 6. Storage waste analysis
+                analysis["storage_waste"] = await self._analyze_storage_waste(
+                    cluster_data, node_rg_costs
+                )
+                
+                # 7. Network waste analysis
+                analysis["network_waste"] = await self._analyze_network_waste(
+                    cluster_data, node_rg_costs
+                )
+                
+                # 8. Calculate total waste metrics
+                analysis["total_waste_cost"] = self._calculate_total_waste_cost(analysis)
+                analysis["waste_percentage"] = self._calculate_waste_percentage(
+                    analysis, node_rg_costs
+                )
+                
+                # 9. Generate waste reduction recommendations
+                analysis["recommendations"] = await self._generate_waste_recommendations(
+                    analysis, node_rg_costs
+                )
+                
+                self.logger.info(
+                    f"Enhanced waste analysis completed for {cluster_name}",
+                    total_waste_cost=analysis["total_waste_cost"],
+                    waste_percentage=analysis["waste_percentage"]
+                )
+            else:
+                self.logger.warning(f"No valid cost data for waste analysis in {cluster_name}")
+                analysis["error"] = "Missing or invalid cost data"
+                
         except Exception as e:
-            import pdb; pdb.set_trace()
-            self.logger.error(f"Waste analysis failed for {cluster_name}: {e}")
+            
+            self.logger.error(f"Enhanced waste analysis failed for {cluster_name}: {e}")
             analysis["error"] = str(e)
         
         return analysis
     
-    async def _identify_idle_resources(self, cluster_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Identify idle CPU, memory, and storage resources"""
+    async def _analyze_resource_waste_with_costs(self, cluster_data: Dict[str, Any], 
+                                               raw_metrics: Dict[str, Any], 
+                                               node_rg_costs: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze resource waste with cost correlation"""
         
-        idle_resources = {
-            "idle_nodes": [],
-            "idle_pods": [],
-            "idle_cpu_capacity": 0.0,
-            "idle_memory_capacity": 0.0,
-            "idle_cost_impact": 0.0
+        resource_waste = {
+            "cpu_waste": {"percentage": 0.0, "cost": 0.0, "wasted_cores": 0.0},
+            "memory_waste": {"percentage": 0.0, "cost": 0.0, "wasted_gb": 0.0},
+            "node_waste": {"underutilized_nodes": [], "total_waste_cost": 0.0},
+            "resource_efficiency": 0.0
         }
         
-        # Extract metrics from Container Insights
-        raw_metrics = cluster_data.get("raw_metrics", {})
+        # Get cluster utilization data
         container_insights = raw_metrics.get("container_insights_data", {})
+        total_cost = node_rg_costs.get("total_cost", 0.0)
         
-        # Analyze node-level idleness
-        node_utilization = defaultdict(lambda: {"cpu": [], "memory": []})
+        # Calculate VM costs for resource correlation
+        by_service = node_rg_costs.get("by_service", {})
+        vm_cost = by_service.get("Virtual Machines", {}).get("cost", total_cost * 0.7)  # Assume 70% is VM cost
         
-        if "aks_node_cpu_performance" in container_insights:
-            cpu_data = container_insights["aks_node_cpu_performance"]
-            for point in cpu_data.get("data_points", []):
-                node_name = point.get("NodeName", "unknown")
-                cpu_usage = self.safe_float(point.get("cpu_usage_millicores", 0))
-                cpu_percent = (cpu_usage / 2000) * 100  # Assuming 2-core baseline
-                node_utilization[node_name]["cpu"].append(min(100, cpu_percent))
-        
-        if "aks_node_memory_performance" in container_insights:
-            memory_data = container_insights["aks_node_memory_performance"]
-            for point in memory_data.get("data_points", []):
-                node_name = point.get("NodeName", "unknown")
-                memory_percent = self.safe_float(point.get("memory_usage_percentage", 0))
-                node_utilization[node_name]["memory"].append(min(100, memory_percent))
-        
-        # Identify idle nodes
-        for node_name, utilization in node_utilization.items():
-            cpu_usage = utilization["cpu"]
-            memory_usage = utilization["memory"]
+        # CPU waste analysis
+        if "cluster_cpu_utilization" in container_insights:
+            cpu_data = container_insights["cluster_cpu_utilization"]
+            data_points = cpu_data.get("data_points", [])
             
-            if cpu_usage and memory_usage:
-                avg_cpu = statistics.mean(cpu_usage)
-                avg_memory = statistics.mean(memory_usage)
+            if data_points:
+                cpu_values = [point.get("cpu_utilization_percentage", 0) for point in data_points]
+                avg_cpu_utilization = sum(cpu_values) / len(cpu_values)
                 
-                # Node is idle if both CPU and memory are below threshold
-                if (avg_cpu < self.thresholds["idle_cpu_threshold"] and 
-                    avg_memory < self.thresholds["idle_memory_threshold"]):
+                if avg_cpu_utilization < self.thresholds['cpu_waste_threshold']:
+                    cpu_waste_percentage = 100 - avg_cpu_utilization
+                    cpu_waste_cost = vm_cost * (cpu_waste_percentage / 100)
                     
-                    idle_resources["idle_nodes"].append({
-                        "node_name": node_name,
-                        "avg_cpu_utilization": avg_cpu,
-                        "avg_memory_utilization": avg_memory,
-                        "idle_duration_hours": len(cpu_usage) * 0.5,  # Assuming 30-min intervals
-                        "estimated_cost_waste": self._estimate_node_cost_waste(node_name, avg_cpu, avg_memory)
-                    })
+                    # Calculate wasted cores
+                    node_pools = cluster_data.get("node_pools", [])
+                    total_cores = 0
+                    for pool in node_pools:
+                        vm_size = pool.get("vm_size", "")
+                        cores, _ = self._parse_vm_size(vm_size)
+                        total_cores += cores * pool.get("count", 0)
+                    
+                    wasted_cores = total_cores * (cpu_waste_percentage / 100)
+                    
+                    resource_waste["cpu_waste"] = {
+                        "percentage": cpu_waste_percentage,
+                        "cost": cpu_waste_cost,
+                        "wasted_cores": wasted_cores,
+                        "utilization": avg_cpu_utilization
+                    }
         
-        # Analyze pod-level idleness
-        pod_utilization = defaultdict(lambda: {"cpu": [], "memory": []})
-        
-        if "pod_cpu_usage" in container_insights:
-            pod_cpu_data = container_insights["pod_cpu_usage"]
-            for point in pod_cpu_data.get("data_points", []):
-                pod_name = point.get("PodName", "unknown")
-                cpu_usage = self.safe_float(point.get("cpu_usage_millicores", 0))
-                pod_utilization[pod_name]["cpu"].append(cpu_usage)
-        
-        if "pod_memory_usage" in container_insights:
-            pod_memory_data = container_insights["pod_memory_usage"]
-            for point in pod_memory_data.get("data_points", []):
-                pod_name = point.get("PodName", "unknown")
-                memory_usage = self.safe_float(point.get("memory_usage_mb", 0))
-                pod_utilization[pod_name]["memory"].append(memory_usage)
-        
-        # Identify idle pods
-        for pod_name, utilization in pod_utilization.items():
-            cpu_usage = utilization["cpu"]
-            memory_usage = utilization["memory"]
+        # Memory waste analysis
+        if "cluster_memory_utilization" in container_insights:
+            memory_data = container_insights["cluster_memory_utilization"]
+            data_points = memory_data.get("data_points", [])
             
-            if cpu_usage and memory_usage:
-                avg_cpu = statistics.mean(cpu_usage)
-                avg_memory = statistics.mean(memory_usage)
+            if data_points:
+                memory_values = [point.get("memory_utilization_percentage", 0) for point in data_points]
+                avg_memory_utilization = sum(memory_values) / len(memory_values)
                 
-                # Pod is idle if resource usage is very low
-                if avg_cpu < 50 and avg_memory < 100:  # 50 millicores, 100MB
-                    idle_resources["idle_pods"].append({
-                        "pod_name": pod_name,
-                        "avg_cpu_usage_millicores": avg_cpu,
-                        "avg_memory_usage_mb": avg_memory,
-                        "idle_duration_hours": len(cpu_usage) * 0.25,  # Assuming 15-min intervals
-                        "estimated_cost_waste": self._estimate_pod_cost_waste(avg_cpu, avg_memory)
+                if avg_memory_utilization < self.thresholds['memory_waste_threshold']:
+                    memory_waste_percentage = 100 - avg_memory_utilization
+                    memory_waste_cost = vm_cost * (memory_waste_percentage / 100)
+                    
+                    # Calculate wasted memory
+                    node_pools = cluster_data.get("node_pools", [])
+                    total_memory = 0
+                    for pool in node_pools:
+                        vm_size = pool.get("vm_size", "")
+                        _, memory_gb = self._parse_vm_size(vm_size)
+                        total_memory += memory_gb * pool.get("count", 0)
+                    
+                    wasted_memory = total_memory * (memory_waste_percentage / 100)
+                    
+                    resource_waste["memory_waste"] = {
+                        "percentage": memory_waste_percentage,
+                        "cost": memory_waste_cost,
+                        "wasted_gb": wasted_memory,
+                        "utilization": avg_memory_utilization
+                    }
+        
+        # Node-level waste analysis
+        if "node_metrics" in raw_metrics:
+            node_metrics = raw_metrics["node_metrics"]
+            node_pools = cluster_data.get("node_pools", [])
+            
+            for pool in node_pools:
+                pool_name = pool.get("name", "")
+                node_count = pool.get("count", 0)
+                vm_size = pool.get("vm_size", "")
+                
+                # Estimate pool cost
+                pool_cost = vm_cost * (node_count / max(sum(p.get("count", 0) for p in node_pools), 1))
+                
+                # Check if pool is underutilized (this would need more detailed node metrics)
+                # For now, we'll use cluster-level metrics as proxy
+                cluster_cpu_avg = resource_waste["cpu_waste"].get("utilization", 50)
+                cluster_memory_avg = resource_waste["memory_waste"].get("utilization", 50)
+                
+                if cluster_cpu_avg < 30 and cluster_memory_avg < 30:  # Both CPU and memory underutilized
+                    resource_waste["node_waste"]["underutilized_nodes"].append({
+                        "pool_name": pool_name,
+                        "node_count": node_count,
+                        "vm_size": vm_size,
+                        "estimated_waste_cost": pool_cost * 0.5,  # Assume 50% waste
+                        "recommended_action": "Scale down or right-size"
                     })
         
-        # Calculate idle capacity
-        total_idle_nodes = len(idle_resources["idle_nodes"])
-        if total_idle_nodes > 0:
-            idle_resources["idle_cpu_capacity"] = total_idle_nodes * 2.0  # 2 cores per node estimate
-            idle_resources["idle_memory_capacity"] = total_idle_nodes * 8.0  # 8GB per node estimate
-        
-        # Calculate cost impact
-        idle_resources["idle_cost_impact"] = (
-            sum(node["estimated_cost_waste"] for node in idle_resources["idle_nodes"]) +
-            sum(pod["estimated_cost_waste"] for pod in idle_resources["idle_pods"])
+        # Calculate total node waste cost
+        resource_waste["node_waste"]["total_waste_cost"] = sum(
+            node["estimated_waste_cost"] for node in resource_waste["node_waste"]["underutilized_nodes"]
         )
         
-        return idle_resources
-    
-    async def _detect_zombie_workloads(self, cluster_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Detect zombie workloads (long-running, failed, or stuck resources)"""
+        # Calculate overall resource efficiency
+        cpu_efficiency = resource_waste["cpu_waste"].get("utilization", 100)
+        memory_efficiency = resource_waste["memory_waste"].get("utilization", 100)
+        resource_waste["resource_efficiency"] = (cpu_efficiency + memory_efficiency) / 2
         
-        zombie_workloads = {
-            "zombie_pods": [],
-            "stuck_deployments": [],
-            "failed_jobs": [],
-            "long_running_pods": [],
-            "zombie_cost_impact": 0.0
+        return resource_waste
+    
+    async def _analyze_cost_waste(self, cluster_data: Dict[str, Any], 
+                                node_rg_costs: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze cost waste patterns"""
+        
+        cost_waste = {
+            "service_waste": {},
+            "daily_cost_spikes": [],
+            "unused_resources": [],
+            "optimization_opportunities": [],
+            "total_cost_waste": 0.0
         }
         
-        # Get Kubernetes resources
-        k8s_resources = cluster_data.get("kubernetes_resources", {})
-        pods = k8s_resources.get("pods", [])
-        deployments = k8s_resources.get("deployments", [])
+        total_cost = node_rg_costs.get("total_cost", 0.0)
         
-        current_time = datetime.now(timezone.utc)
+        # Service-level waste analysis
+        by_service = node_rg_costs.get("by_service", {})
         
-        # Analyze pods for zombie behavior
-        for pod in pods:
-            pod_name = pod.get("name", "unknown")
-            status = pod.get("status", "Unknown")
-            created_str = pod.get("created")
-            restart_count = sum(
-                container.get("restart_count", 0) 
-                for container in pod.get("containers", [])
-            )
+        for service_name, service_data in by_service.items():
+            service_cost = service_data.get("cost", 0.0)
+            service_percentage = (service_cost / max(total_cost, 1)) * 100
             
-            if created_str:
-                try:
-                    created_time = datetime.fromisoformat(created_str.replace('Z', '+00:00'))
-                    age_hours = (current_time - created_time).total_seconds() / 3600
-                    
-                    # Zombie criteria
-                    is_failed = status in ["Failed", "Error", "CrashLoopBackOff"]
-                    is_long_running = age_hours > self.thresholds["zombie_pod_age_hours"]
-                    has_many_restarts = restart_count > self.thresholds["failed_pod_threshold"]
-                    
-                    if is_failed:
-                        zombie_workloads["zombie_pods"].append({
-                            "pod_name": pod_name,
-                            "namespace": pod.get("namespace", "unknown"),
-                            "status": status,
-                            "age_hours": age_hours,
-                            "restart_count": restart_count,
-                            "issue": "Failed status",
-                            "estimated_waste_cost": self._estimate_zombie_cost(age_hours)
-                        })
-                    elif is_long_running and has_many_restarts:
-                        zombie_workloads["long_running_pods"].append({
-                            "pod_name": pod_name,
-                            "namespace": pod.get("namespace", "unknown"),
-                            "status": status,
-                            "age_hours": age_hours,
-                            "restart_count": restart_count,
-                            "issue": "Long-running with frequent restarts",
-                            "estimated_waste_cost": self._estimate_zombie_cost(age_hours)
-                        })
-                        
-                except ValueError:
-                    # Skip pods with invalid timestamps
-                    continue
-        
-        # Analyze deployments for stuck status
-        for deployment in deployments:
-            deployment_name = deployment.get("name", "unknown")
-            replicas = deployment.get("replicas", 0)
-            ready_replicas = deployment.get("ready_replicas", 0)
-            available_replicas = deployment.get("available_replicas", 0)
-            
-            # Deployment is stuck if replicas don't match ready/available
-            if replicas > 0 and (ready_replicas < replicas or available_replicas < replicas):
-                unhealthy_ratio = 1 - (min(ready_replicas, available_replicas) / replicas)
+            # Identify services with disproportionate costs
+            if service_percentage > 10:  # Services consuming >10% of total cost
+                waste_indicators = []
                 
-                if unhealthy_ratio > 0.5:  # More than 50% unhealthy
-                    zombie_workloads["stuck_deployments"].append({
-                        "deployment_name": deployment_name,
-                        "namespace": deployment.get("namespace", "unknown"),
-                        "replicas": replicas,
-                        "ready_replicas": ready_replicas,
-                        "available_replicas": available_replicas,
-                        "unhealthy_ratio": unhealthy_ratio,
-                        "issue": "Deployment stuck with unhealthy replicas",
-                        "estimated_waste_cost": self._estimate_deployment_waste_cost(replicas - ready_replicas)
+                # Check for specific waste patterns
+                if service_name == "Storage":
+                    waste_indicators.append("Potential unused storage volumes")
+                elif service_name == "Load Balancer":
+                    waste_indicators.append("Potential unused load balancers")
+                elif service_name == "Public IP":
+                    waste_indicators.append("Potential unused public IPs")
+                
+                if waste_indicators:
+                    cost_waste["service_waste"][service_name] = {
+                        "cost": service_cost,
+                        "percentage": service_percentage,
+                        "waste_indicators": waste_indicators,
+                        "potential_savings": service_cost * 0.2  # Assume 20% waste
+                    }
+        
+        # Daily cost spike analysis
+        daily_breakdown = node_rg_costs.get("daily_breakdown", [])
+        if len(daily_breakdown) > 7:
+            costs = [day.get("cost", 0.0) for day in daily_breakdown]
+            mean_cost = sum(costs) / len(costs)
+            
+            for day in daily_breakdown:
+                daily_cost = day.get("cost", 0.0)
+                if daily_cost > mean_cost * 1.3:  # 30% above average
+                    cost_waste["daily_cost_spikes"].append({
+                        "date": day.get("date", ""),
+                        "cost": daily_cost,
+                        "excess_cost": daily_cost - mean_cost,
+                        "percentage_above_average": ((daily_cost - mean_cost) / mean_cost) * 100
+                    })
+        
+        # Resource ID level waste
+        by_resource_id = node_rg_costs.get("by_resource_id", {})
+        
+        for resource_id, resource_data in by_resource_id.items():
+            resource_cost = resource_data.get("cost", 0.0)
+            resource_type = resource_data.get("resource_type", "")
+            
+            # Flag resources with high cost but potentially low utilization
+            if resource_cost > total_cost * 0.05:  # Resource consuming >5% of total cost
+                cost_waste["unused_resources"].append({
+                    "resource_id": resource_id,
+                    "resource_type": resource_type,
+                    "cost": resource_cost,
+                    "percentage": (resource_cost / total_cost) * 100,
+                    "investigation_needed": True
+                })
+        
+        # Calculate total cost waste
+        service_waste_total = sum(
+            waste_data["potential_savings"] for waste_data in cost_waste["service_waste"].values()
+        )
+        spike_waste_total = sum(
+            spike["excess_cost"] for spike in cost_waste["daily_cost_spikes"]
+        )
+        
+        cost_waste["total_cost_waste"] = service_waste_total + spike_waste_total
+        
+        return cost_waste
+    
+    async def _detect_zombie_resources(self, cluster_data: Dict[str, Any], 
+                                     node_rg_costs: Dict[str, Any]) -> Dict[str, Any]:
+        """Detect zombie resources (resources that exist but are unused)"""
+        
+        zombie_resources = {
+            "zombie_pods": [],
+            "zombie_volumes": [],
+            "zombie_services": [],
+            "zombie_cost_impact": 0.0,
+            "cleanup_recommendations": []
+        }
+        
+        k8s_resources = cluster_data.get("kubernetes_resources", {})
+        total_cost = node_rg_costs.get("total_cost", 0.0)
+        
+        # Zombie pod detection
+        pods = k8s_resources.get("pods", [])
+        
+        for pod in pods:
+            if not isinstance(pod, dict):
+                logger.warning(f"Skipping invalid pod object (not a dict): {pod}")
+                continue
+
+            pod_status = pod.get("status", {})
+
+            
+
+            
+            # Check for failed or completed pods that are still consuming resources
+            if pod_status in ["Failed", "Succeeded"]:
+                
+                # Estimate cost impact based on resource requests
+                resource_requests = pod.get("resource_requests", {})
+                cpu_request = resource_requests.get("cpu", 0)
+                memory_request = resource_requests.get("memory", 0)
+                
+                # Rough cost estimation
+                estimated_cost = (cpu_request * 0.05 + memory_request * 0.01) * 24 * 30  # Monthly cost
+                
+                zombie_resources["zombie_pods"].append({
+                    "name": pod.get("name", "unknown"),
+                    "namespace": pod.get("namespace", "unknown"),
+                    "phase": phase,
+                    "estimated_monthly_cost": estimated_cost,
+                    "age_days": self._calculate_resource_age(pod.get("created", "")),
+                    "recommendation": "Delete completed/failed pod"
+                })
+        
+        # Zombie volume detection
+        volumes = k8s_resources.get("persistent_volumes", [])
+        for volume in volumes:
+            volume_status = volume.get("status", {})
+            phase = volume_status.get("phase", "")
+            
+            # Check for available volumes that are not bound
+            if phase == "Available":
+                # Estimate storage cost
+                capacity = volume.get("capacity", {}).get("storage", "0Gi")
+                size_gb = self._parse_storage_size(capacity)
+                estimated_cost = size_gb * 0.1 * 30  # $0.1 per GB per month
+                
+                zombie_resources["zombie_volumes"].append({
+                    "name": volume.get("name", "unknown"),
+                    "capacity": capacity,
+                    "storage_class": volume.get("storage_class", "unknown"),
+                    "estimated_monthly_cost": estimated_cost,
+                    "age_days": self._calculate_resource_age(volume.get("created", "")),
+                    "recommendation": "Delete unbound persistent volume"
+                })
+        
+        # Zombie service detection (services without endpoints)
+        services = k8s_resources.get("services", [])
+        for service in services:
+            # Check if service has no endpoints (no backing pods)
+            if not service.get("endpoints", []):
+                service_type = service.get("type", "ClusterIP")
+                
+                # Estimate cost based on service type
+                estimated_cost = 0.0
+                if service_type == "LoadBalancer":
+                    estimated_cost = 20.0  # $20/month for load balancer
+                elif service_type == "NodePort":
+                    estimated_cost = 5.0   # $5/month for nodeport overhead
+                
+                if estimated_cost > 0:
+                    zombie_resources["zombie_services"].append({
+                        "name": service.get("name", "unknown"),
+                        "namespace": service.get("namespace", "unknown"),
+                        "type": service_type,
+                        "estimated_monthly_cost": estimated_cost,
+                        "age_days": self._calculate_resource_age(service.get("created", "")),
+                        "recommendation": "Delete service without endpoints"
                     })
         
         # Calculate total zombie cost impact
-        zombie_workloads["zombie_cost_impact"] = (
-            sum(pod["estimated_waste_cost"] for pod in zombie_workloads["zombie_pods"]) +
-            sum(pod["estimated_waste_cost"] for pod in zombie_workloads["long_running_pods"]) +
-            sum(dep["estimated_waste_cost"] for dep in zombie_workloads["stuck_deployments"])
+        zombie_resources["zombie_cost_impact"] = (
+            sum(pod["estimated_monthly_cost"] for pod in zombie_resources["zombie_pods"]) +
+            sum(vol["estimated_monthly_cost"] for vol in zombie_resources["zombie_volumes"]) +
+            sum(svc["estimated_monthly_cost"] for svc in zombie_resources["zombie_services"])
         )
         
-        return zombie_workloads
-    
-    async def _find_overprovisioned_resources(self, cluster_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Find overprovisioned resources (requests >> actual usage)"""
+        # Generate cleanup recommendations
+        if zombie_resources["zombie_pods"]:
+            zombie_resources["cleanup_recommendations"].append(
+                f"Clean up {len(zombie_resources['zombie_pods'])} zombie pods - potential savings: ${sum(pod['estimated_monthly_cost'] for pod in zombie_resources['zombie_pods']):.2f}/month"
+            )
         
-        overprovisioned = {
-            "overprovisioned_pods": [],
-            "overprovisioned_nodes": [],
-            "resource_waste": {},
-            "overprovisioning_cost": 0.0
+        if zombie_resources["zombie_volumes"]:
+            zombie_resources["cleanup_recommendations"].append(
+                f"Clean up {len(zombie_resources['zombie_volumes'])} unbound volumes - potential savings: ${sum(vol['estimated_monthly_cost'] for vol in zombie_resources['zombie_volumes']):.2f}/month"
+            )
+        
+        if zombie_resources["zombie_services"]:
+            zombie_resources["cleanup_recommendations"].append(
+                f"Clean up {len(zombie_resources['zombie_services'])} unused services - potential savings: ${sum(svc['estimated_monthly_cost'] for svc in zombie_resources['zombie_services']):.2f}/month"
+            )
+        
+        return zombie_resources
+    
+    async def _analyze_overprovisioning(self, cluster_data: Dict[str, Any], 
+                                      raw_metrics: Dict[str, Any], 
+                                      node_rg_costs: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze overprovisioning waste"""
+        
+        overprovisioning = {
+            "cpu_overprovisioning": {"percentage": 0.0, "cost": 0.0},
+            "memory_overprovisioning": {"percentage": 0.0, "cost": 0.0},
+            "pod_overprovisioning": [],
+            "node_pool_overprovisioning": [],
+            "total_overprovisioning_cost": 0.0
         }
         
-        # Extract resource request and usage data
-        raw_metrics = cluster_data.get("raw_metrics", {})
+        # Get utilization data
         container_insights = raw_metrics.get("container_insights_data", {})
+        total_cost = node_rg_costs.get("total_cost", 0.0)
         
-        # Analyze pod resource requests vs usage
-        pod_efficiency_data = {}
-        
-        if "pod_resource_requests_limits" in container_insights:
-            request_data = container_insights["pod_resource_requests_limits"]
-            for point in request_data.get("data_points", []):
-                pod_name = point.get("PodName", "unknown")
-                pod_efficiency_data[pod_name] = {
-                    "cpu_request": self.safe_float(point.get("cpu_request_millicores", 0)),
-                    "memory_request": self.safe_float(point.get("memory_request_mb", 0)),
-                    "cpu_usage": 0,
-                    "memory_usage": 0
-                }
-        
-        # Add actual usage data
-        if "pod_cpu_usage" in container_insights:
-            cpu_data = container_insights["pod_cpu_usage"]
-            for point in cpu_data.get("data_points", []):
-                pod_name = point.get("PodName", "unknown")
-                if pod_name in pod_efficiency_data:
-                    cpu_usage = self.safe_float(point.get("cpu_usage_millicores", 0))
-                    if pod_efficiency_data[pod_name]["cpu_usage"] == 0:
-                        pod_efficiency_data[pod_name]["cpu_usage"] = cpu_usage
-                    else:
-                        # Average with existing data
-                        pod_efficiency_data[pod_name]["cpu_usage"] = (
-                            pod_efficiency_data[pod_name]["cpu_usage"] + cpu_usage
-                        ) / 2
-        
-        if "pod_memory_usage" in container_insights:
-            memory_data = container_insights["pod_memory_usage"]
-            for point in memory_data.get("data_points", []):
-                pod_name = point.get("PodName", "unknown")
-                if pod_name in pod_efficiency_data:
-                    memory_usage = self.safe_float(point.get("memory_usage_mb", 0))
-                    if pod_efficiency_data[pod_name]["memory_usage"] == 0:
-                        pod_efficiency_data[pod_name]["memory_usage"] = memory_usage
-                    else:
-                        # Average with existing data
-                        pod_efficiency_data[pod_name]["memory_usage"] = (
-                            pod_efficiency_data[pod_name]["memory_usage"] + memory_usage
-                        ) / 2
-        
-        # Identify overprovisioned pods
-        total_wasted_cpu = 0.0
-        total_wasted_memory = 0.0
-        
-        for pod_name, data in pod_efficiency_data.items():
-            cpu_request = data["cpu_request"]
-            memory_request = data["memory_request"]
-            cpu_usage = data["cpu_usage"]
-            memory_usage = data["memory_usage"]
+        # Calculate overprovisioning at cluster level
+        if "cluster_cpu_utilization" in container_insights:
+            cpu_data = container_insights["cluster_cpu_utilization"]
+            data_points = cpu_data.get("data_points", [])
             
-            if cpu_request > 0 and memory_request > 0:
-                cpu_efficiency = (cpu_usage / cpu_request) * 100 if cpu_request > 0 else 0
-                memory_efficiency = (memory_usage / memory_request) * 100 if memory_request > 0 else 0
+            if data_points:
+                cpu_values = [point.get("cpu_utilization_percentage", 0) for point in data_points]
+                avg_cpu_utilization = sum(cpu_values) / len(cpu_values)
                 
-                # Overprovisioned if efficiency is very low
-                if (cpu_efficiency < 25 or memory_efficiency < 25) and (cpu_request > 100 or memory_request > 512):
-                    wasted_cpu = max(0, cpu_request - cpu_usage)
-                    wasted_memory = max(0, memory_request - memory_usage)
+                if avg_cpu_utilization < 50:  # Less than 50% utilization indicates overprovisioning
+                    overprovisioning_percentage = 100 - avg_cpu_utilization
+                    overprovisioning_cost = total_cost * (overprovisioning_percentage / 200)  # Conservative estimate
                     
-                    total_wasted_cpu += wasted_cpu
-                    total_wasted_memory += wasted_memory
+                    overprovisioning["cpu_overprovisioning"] = {
+                        "percentage": overprovisioning_percentage,
+                        "cost": overprovisioning_cost,
+                        "current_utilization": avg_cpu_utilization,
+                        "target_utilization": 70.0
+                    }
+        
+        # Memory overprovisioning analysis
+        if "cluster_memory_utilization" in container_insights:
+            memory_data = container_insights["cluster_memory_utilization"]
+            data_points = memory_data.get("data_points", [])
+            
+            if data_points:
+                memory_values = [point.get("memory_utilization_percentage", 0) for point in data_points]
+                avg_memory_utilization = sum(memory_values) / len(memory_values)
+                
+                if avg_memory_utilization < 50:  # Less than 50% utilization indicates overprovisioning
+                    overprovisioning_percentage = 100 - avg_memory_utilization
+                    overprovisioning_cost = total_cost * (overprovisioning_percentage / 200)  # Conservative estimate
                     
-                    overprovisioned["overprovisioned_pods"].append({
-                        "pod_name": pod_name,
-                        "cpu_request_millicores": cpu_request,
-                        "cpu_usage_millicores": cpu_usage,
-                        "memory_request_mb": memory_request,
-                        "memory_usage_mb": memory_usage,
-                        "cpu_efficiency": cpu_efficiency,
-                        "memory_efficiency": memory_efficiency,
-                        "wasted_cpu_millicores": wasted_cpu,
-                        "wasted_memory_mb": wasted_memory,
-                        "estimated_waste_cost": self._estimate_overprovisioning_cost(wasted_cpu, wasted_memory)
-                    })
+                    overprovisioning["memory_overprovisioning"] = {
+                        "percentage": overprovisioning_percentage,
+                        "cost": overprovisioning_cost,
+                        "current_utilization": avg_memory_utilization,
+                        "target_utilization": 70.0
+                    }
         
-        # Resource waste summary
-        overprovisioned["resource_waste"] = {
-            "total_wasted_cpu_cores": total_wasted_cpu / 1000,
-            "total_wasted_memory_gb": total_wasted_memory / 1024,
-            "wasted_cpu_percentage": self._calculate_waste_percentage(total_wasted_cpu, "cpu"),
-            "wasted_memory_percentage": self._calculate_waste_percentage(total_wasted_memory, "memory")
-        }
-        
-        # Calculate overprovisioning cost
-        overprovisioned["overprovisioning_cost"] = sum(
-            pod["estimated_waste_cost"] for pod in overprovisioned["overprovisioned_pods"]
-        )
-        
-        return overprovisioned
-    
-    async def _identify_failed_resources(self, cluster_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Identify failed or problematic resources consuming costs"""
-        
-        failed_resources = {
-            "failed_pods": [],
-            "error_events": [],
-            "unhealthy_services": [],
-            "failed_storage": [],
-            "failure_cost_impact": 0.0
-        }
-        
-        # Get Kubernetes resources
+        # Pod-level overprovisioning (would need more detailed metrics)
         k8s_resources = cluster_data.get("kubernetes_resources", {})
         pods = k8s_resources.get("pods", [])
-        services = k8s_resources.get("services", [])
-        events = k8s_resources.get("events", [])
-        pvs = k8s_resources.get("persistent_volumes", [])
         
-        # Analyze failed pods
         for pod in pods:
-            status = pod.get("status", "Unknown")
-            restart_count = sum(
-                container.get("restart_count", 0) 
-                for container in pod.get("containers", [])
-            )
+            resource_requests = pod.get("resource_requests", {})
+            resource_limits = pod.get("resource_limits", {})
             
-            if status in ["Failed", "Error", "CrashLoopBackOff"] or restart_count > 10:
-                failed_resources["failed_pods"].append({
+            # Check if limits are significantly higher than requests
+            cpu_request = resource_requests.get("cpu", 0)
+            cpu_limit = resource_limits.get("cpu", 0)
+            memory_request = resource_requests.get("memory", 0)
+            memory_limit = resource_limits.get("memory", 0)
+            
+            if cpu_limit > cpu_request * 2:  # Limit is 2x request
+                overprovisioning["pod_overprovisioning"].append({
                     "pod_name": pod.get("name", "unknown"),
                     "namespace": pod.get("namespace", "unknown"),
-                    "status": status,
-                    "restart_count": restart_count,
-                    "node": pod.get("node", "unknown"),
-                    "failure_reason": self._determine_failure_reason(pod),
-                    "estimated_cost_impact": self._estimate_failed_pod_cost(pod)
+                    "cpu_request": cpu_request,
+                    "cpu_limit": cpu_limit,
+                    "overprovisioning_ratio": cpu_limit / max(cpu_request, 1),
+                    "resource_type": "cpu",
+                    "recommendation": "Reduce CPU limits closer to requests"
                 })
-        
-        # Analyze error events
-        for event in events[:50]:  # Recent events only
-            event_type = event.get("type", "")
-            reason = event.get("reason", "")
             
-            if event_type == "Warning" and reason in ["FailedScheduling", "FailedMount", "Unhealthy"]:
-                failed_resources["error_events"].append({
-                    "event_type": event_type,
-                    "reason": reason,
-                    "message": event.get("message", ""),
-                    "object_kind": event.get("involved_object", {}).get("kind", ""),
-                    "object_name": event.get("involved_object", {}).get("name", ""),
-                    "namespace": event.get("namespace", "unknown"),
-                    "count": event.get("count", 1)
+            if memory_limit > memory_request * 2:  # Limit is 2x request
+                overprovisioning["pod_overprovisioning"].append({
+                    "pod_name": pod.get("name", "unknown"),
+                    "namespace": pod.get("namespace", "unknown"),
+                    "memory_request": memory_request,
+                    "memory_limit": memory_limit,
+                    "overprovisioning_ratio": memory_limit / max(memory_request, 1),
+                    "resource_type": "memory",
+                    "recommendation": "Reduce memory limits closer to requests"
                 })
         
-        # Analyze services without endpoints
-        for service in services:
-            endpoints = service.get("endpoints", [])
-            service_type = service.get("type", "")
+        # Node pool overprovisioning
+        node_pools = cluster_data.get("node_pools", [])
+        for pool in node_pools:
+            # Check if node pool has too many nodes for current workload
+            node_count = pool.get("count", 0)
+            max_count = pool.get("max_count", node_count)
             
-            if service_type == "LoadBalancer" and not endpoints:
-                failed_resources["unhealthy_services"].append({
-                    "service_name": service.get("name", "unknown"),
-                    "namespace": service.get("namespace", "unknown"),
-                    "type": service_type,
-                    "issue": "LoadBalancer with no endpoints",
-                    "estimated_cost_impact": 50.0  # Estimated monthly cost for unused LB
-                })
+            # If current count is close to max but utilization is low, it's overprovisioned
+            if node_count >= max_count * 0.8:  # 80% of max capacity
+                cpu_util = overprovisioning["cpu_overprovisioning"].get("current_utilization", 50)
+                memory_util = overprovisioning["memory_overprovisioning"].get("current_utilization", 50)
+                
+                if cpu_util < 40 and memory_util < 40:
+                    # Estimate cost of overprovisioned nodes
+                    vm_cost = self._estimate_vm_cost(pool.get("vm_size", ""), 1)
+                    overprovisioned_nodes = max(1, int(node_count * 0.3))  # Assume 30% overprovisioning
+                    overprovisioning_cost = vm_cost * overprovisioned_nodes
+                    
+                    overprovisioning["node_pool_overprovisioning"].append({
+                        "pool_name": pool.get("name", "unknown"),
+                        "current_nodes": node_count,
+                        "recommended_nodes": node_count - overprovisioned_nodes,
+                        "overprovisioned_nodes": overprovisioned_nodes,
+                        "monthly_waste_cost": overprovisioning_cost,
+                        "vm_size": pool.get("vm_size", ""),
+                        "recommendation": f"Scale down by {overprovisioned_nodes} nodes"
+                    })
         
-        # Analyze failed storage
-        for pv in pvs:
-            status = pv.get("status", "Unknown")
-            
-            if status in ["Failed", "Released"]:
-                capacity = self._parse_storage_capacity(pv.get("capacity", "0"))
-                failed_resources["failed_storage"].append({
-                    "pv_name": pv.get("name", "unknown"),
-                    "status": status,
-                    "capacity_gb": capacity,
-                    "storage_class": pv.get("storage_class", "unknown"),
-                    "issue": f"PV in {status} state",
-                    "estimated_cost_impact": capacity * 0.1  # $0.1/GB/month estimate
-                })
-        
-        # Calculate total failure cost impact
-        failed_resources["failure_cost_impact"] = (
-            sum(pod["estimated_cost_impact"] for pod in failed_resources["failed_pods"]) +
-            sum(svc["estimated_cost_impact"] for svc in failed_resources["unhealthy_services"]) +
-            sum(pv["estimated_cost_impact"] for pv in failed_resources["failed_storage"])
+        # Calculate total overprovisioning cost
+        overprovisioning["total_overprovisioning_cost"] = (
+            overprovisioning["cpu_overprovisioning"].get("cost", 0.0) +
+            overprovisioning["memory_overprovisioning"].get("cost", 0.0) +
+            sum(pool["monthly_waste_cost"] for pool in overprovisioning["node_pool_overprovisioning"])
         )
         
-        return failed_resources
+        return overprovisioning
     
-    async def _detect_unused_storage(self, cluster_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Detect unused or underutilized storage resources"""
+    async def _analyze_idle_resources(self, cluster_data: Dict[str, Any], 
+                                    raw_metrics: Dict[str, Any], 
+                                    node_rg_costs: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze idle resources"""
         
-        unused_storage = {
-            "unused_volumes": [],
-            "underutilized_volumes": [],
-            "orphaned_volumes": [],
+        idle_resources = {
+            "idle_nodes": [],
+            "idle_volumes": [],
+            "idle_services": [],
+            "idle_cost_impact": 0.0,
+            "recommendations": []
+        }
+        
+        total_cost = node_rg_costs.get("total_cost", 0.0)
+        
+        # Idle node detection (based on very low utilization)
+        container_insights = raw_metrics.get("container_insights_data", {})
+        
+        if "cluster_cpu_utilization" in container_insights:
+            cpu_data = container_insights["cluster_cpu_utilization"]
+            data_points = cpu_data.get("data_points", [])
+            
+            if data_points:
+                cpu_values = [point.get("cpu_utilization_percentage", 0) for point in data_points]
+                avg_cpu_utilization = sum(cpu_values) / len(cpu_values)
+                
+                if avg_cpu_utilization < self.thresholds['idle_threshold']:
+                    # Estimate idle cost
+                    idle_cost = total_cost * (self.thresholds['idle_threshold'] - avg_cpu_utilization) / 100
+                    
+                    idle_resources["idle_nodes"].append({
+                        "issue": "Cluster CPU utilization below idle threshold",
+                        "current_utilization": avg_cpu_utilization,
+                        "threshold": self.thresholds['idle_threshold'],
+                        "estimated_idle_cost": idle_cost,
+                        "recommendation": "Consider scaling down or consolidating workloads"
+                    })
+        
+        # Idle volume detection
+        k8s_resources = cluster_data.get("kubernetes_resources", {})
+        volumes = k8s_resources.get("persistent_volumes", [])
+        
+        for volume in volumes:
+            volume_status = volume.get("status", {})
+            phase = volume_status.get("phase", "")
+            
+            # Volumes that are bound but not actively used
+            if phase == "Bound":
+                # Check if volume has been idle (would need more detailed metrics)
+                age_days = self._calculate_resource_age(volume.get("created", ""))
+                
+                if age_days > 30:  # Volume older than 30 days, potentially idle
+                    capacity = volume.get("capacity", {}).get("storage", "0Gi")
+                    size_gb = self._parse_storage_size(capacity)
+                    estimated_cost = size_gb * 0.1 * 30  # $0.1 per GB per month
+                    
+                    idle_resources["idle_volumes"].append({
+                        "name": volume.get("name", "unknown"),
+                        "capacity": capacity,
+                        "age_days": age_days,
+                        "estimated_monthly_cost": estimated_cost,
+                        "recommendation": "Investigate volume usage patterns"
+                    })
+        
+        # Calculate total idle cost impact
+        idle_resources["idle_cost_impact"] = (
+            sum(node["estimated_idle_cost"] for node in idle_resources["idle_nodes"]) +
+            sum(vol["estimated_monthly_cost"] for vol in idle_resources["idle_volumes"])
+        )
+        
+        # Generate recommendations
+        if idle_resources["idle_nodes"]:
+            idle_resources["recommendations"].append(
+                "Implement auto-scaling to handle idle node capacity"
+            )
+        
+        if idle_resources["idle_volumes"]:
+            idle_resources["recommendations"].append(
+                f"Review {len(idle_resources['idle_volumes'])} potentially idle volumes"
+            )
+        
+        return idle_resources
+    
+    async def _analyze_storage_waste(self, cluster_data: Dict[str, Any], 
+                                   node_rg_costs: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze storage waste"""
+        
+        storage_waste = {
+            "unused_disks": [],
+            "oversized_volumes": [],
+            "premium_storage_opportunities": [],
             "storage_waste_cost": 0.0
         }
         
-        # Get storage resources
-        k8s_resources = cluster_data.get("kubernetes_resources", {})
-        pvs = k8s_resources.get("persistent_volumes", [])
-        pvcs = k8s_resources.get("persistent_volume_claims", [])
+        # Get storage costs from Azure cost data
+        by_service = node_rg_costs.get("by_service", {})
+        storage_services = ["Storage", "Managed Disks", "Storage Accounts"]
+        total_storage_cost = sum(by_service.get(service, {}).get("cost", 0.0) for service in storage_services)
         
-        # Extract storage utilization data
-        raw_metrics = cluster_data.get("raw_metrics", {})
-        container_insights = raw_metrics.get("container_insights_data", {})
+        # Analyze storage by resource type
+        by_resource_type = node_rg_costs.get("by_resource_type", {})
         
-        volume_utilization = {}
-        if "persistent_volume_claim_metrics" in container_insights:
-            pvc_data = container_insights["persistent_volume_claim_metrics"]
-            for point in pvc_data.get("data_points", []):
-                pv_name = point.get("PVName", "unknown")
-                used_percentage = self.safe_float(point.get("used_percentage", 0))
-                volume_utilization[pv_name] = used_percentage
-        
-        # Analyze persistent volumes
-        for pv in pvs:
-            pv_name = pv.get("name", "unknown")
-            status = pv.get("status", "Unknown")
-            capacity = self._parse_storage_capacity(pv.get("capacity", "0"))
-            claim_ref = pv.get("claim")
-            
-            # Check if volume is unused
-            if status == "Available" and not claim_ref:
-                unused_storage["unused_volumes"].append({
-                    "pv_name": pv_name,
-                    "capacity_gb": capacity,
-                    "storage_class": pv.get("storage_class", "unknown"),
-                    "status": status,
-                    "issue": "Volume available but not claimed",
-                    "estimated_waste_cost": capacity * 0.1  # $0.1/GB/month
-                })
-            
-            # Check utilization if volume is bound
-            elif status == "Bound" and pv_name in volume_utilization:
-                utilization = volume_utilization[pv_name]
+        for resource_type, cost_data in by_resource_type.items():
+            if "disk" in resource_type.lower() or "storage" in resource_type.lower():
+                resource_cost = cost_data.get("cost", 0.0)
                 
-                if utilization < 20:  # Less than 20% utilized
-                    unused_storage["underutilized_volumes"].append({
-                        "pv_name": pv_name,
-                        "capacity_gb": capacity,
-                        "utilization_percentage": utilization,
-                        "storage_class": pv.get("storage_class", "unknown"),
-                        "issue": f"Volume only {utilization:.1f}% utilized",
-                        "estimated_waste_cost": capacity * (100 - utilization) / 100 * 0.1
+                # Check if storage cost is disproportionate
+                if resource_cost > total_storage_cost * 0.3:  # >30% of storage cost
+                    storage_waste["premium_storage_opportunities"].append({
+                        "resource_type": resource_type,
+                        "current_cost": resource_cost,
+                        "potential_savings": resource_cost * 0.3,  # 30% savings from optimization
+                        "recommendation": f"Review {resource_type} configuration and consider Standard tier"
                     })
         
-        # Find orphaned PVCs (PVCs without corresponding pods)
-        pvc_to_pod_mapping = self._map_pvcs_to_pods(k8s_resources)
+        # Kubernetes storage analysis
+        k8s_resources = cluster_data.get("kubernetes_resources", {})
+        volumes = k8s_resources.get("persistent_volumes", [])
         
-        for pvc in pvcs:
-            pvc_name = pvc.get("name", "unknown")
-            namespace = pvc.get("namespace", "unknown")
-            pvc_key = f"{namespace}/{pvc_name}"
+        for volume in volumes:
+            capacity = volume.get("capacity", {}).get("storage", "0Gi")
+            size_gb = self._parse_storage_size(capacity)
+            storage_class = volume.get("storage_class", "")
             
-            if pvc_key not in pvc_to_pod_mapping:
-                capacity = self._parse_storage_capacity(pvc.get("capacity", "0"))
-                unused_storage["orphaned_volumes"].append({
-                    "pvc_name": pvc_name,
-                    "namespace": namespace,
-                    "capacity_gb": capacity,
-                    "status": pvc.get("status", "Unknown"),
-                    "issue": "PVC not used by any pod",
-                    "estimated_waste_cost": capacity * 0.1
+            # Check for oversized volumes (>100GB)
+            if size_gb > 100:
+                estimated_cost = size_gb * 0.1 * 30  # $0.1 per GB per month
+                
+                storage_waste["oversized_volumes"].append({
+                    "name": volume.get("name", "unknown"),
+                    "capacity": capacity,
+                    "size_gb": size_gb,
+                    "storage_class": storage_class,
+                    "estimated_monthly_cost": estimated_cost,
+                    "recommendation": "Review if full capacity is needed"
                 })
         
-        # Calculate total storage waste cost
-        unused_storage["storage_waste_cost"] = (
-            sum(vol["estimated_waste_cost"] for vol in unused_storage["unused_volumes"]) +
-            sum(vol["estimated_waste_cost"] for vol in unused_storage["underutilized_volumes"]) +
-            sum(vol["estimated_waste_cost"] for vol in unused_storage["orphaned_volumes"])
+        # Calculate total storage waste
+        storage_waste["storage_waste_cost"] = (
+            sum(opp["potential_savings"] for opp in storage_waste["premium_storage_opportunities"]) +
+            sum(vol["estimated_monthly_cost"] * 0.2 for vol in storage_waste["oversized_volumes"])  # 20% waste assumption
         )
         
-        return unused_storage
+        return storage_waste
     
-    async def _analyze_network_waste(self, cluster_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Analyze network resource waste"""
+    async def _analyze_network_waste(self, cluster_data: Dict[str, Any], 
+                                   node_rg_costs: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze network waste"""
         
         network_waste = {
             "unused_load_balancers": [],
             "unused_public_ips": [],
-            "low_traffic_services": [],
             "network_waste_cost": 0.0
         }
         
-        # Get network resources
-        k8s_resources = cluster_data.get("kubernetes_resources", {})
-        services = k8s_resources.get("services", [])
+        # Get network costs from Azure cost data
+        by_service = node_rg_costs.get("by_service", {})
+        network_services = ["Load Balancer", "Public IP", "Application Gateway", "Bandwidth"]
         
-        # Analyze load balancer services
-        for service in services:
-            service_type = service.get("type", "")
-            service_name = service.get("name", "unknown")
-            namespace = service.get("namespace", "unknown")
-            endpoints = service.get("endpoints", [])
+        for service_name in network_services:
+            service_data = by_service.get(service_name, {})
+            service_cost = service_data.get("cost", 0.0)
             
-            if service_type == "LoadBalancer":
-                # Check if load balancer has endpoints
-                if not endpoints:
-                    network_waste["unused_load_balancers"].append({
-                        "service_name": service_name,
-                        "namespace": namespace,
-                        "issue": "LoadBalancer service without endpoints",
-                        "estimated_waste_cost": 25.0  # ~$25/month for Azure LB
-                    })
-                
-                # Check traffic metrics if available
-                traffic_metrics = service.get("traffic_metrics", {})
-                if traffic_metrics:
-                    requests_per_day = traffic_metrics.get("requests_per_day", 0)
-                    if requests_per_day < 100:  # Very low traffic
-                        network_waste["low_traffic_services"].append({
-                            "service_name": service_name,
-                            "namespace": namespace,
-                            "requests_per_day": requests_per_day,
-                            "issue": "LoadBalancer with very low traffic",
-                            "estimated_waste_cost": 20.0  # Partial waste
+            if service_cost > 0:
+                if service_name == "Load Balancer":
+                    # Check if load balancer is actually needed
+                    k8s_resources = cluster_data.get("kubernetes_resources", {})
+                    services = k8s_resources.get("services", [])
+                    lb_services = [svc for svc in services if svc.get("type") == "LoadBalancer"]
+                    
+                    if len(lb_services) < service_cost / 20:  # Less than 1 LB service per $20
+                        network_waste["unused_load_balancers"].append({
+                            "service": service_name,
+                            "cost": service_cost,
+                            "lb_services_count": len(lb_services),
+                            "potential_savings": service_cost * 0.5,  # 50% savings assumption
+                            "recommendation": "Review load balancer usage"
                         })
+                
+                elif service_name == "Public IP":
+                    # Similar analysis for public IPs
+                    network_waste["unused_public_ips"].append({
+                        "service": service_name,
+                        "cost": service_cost,
+                        "potential_savings": service_cost * 0.3,  # 30% savings assumption
+                        "recommendation": "Review public IP assignments"
+                    })
         
-        # Calculate network waste cost
+        # Calculate total network waste
         network_waste["network_waste_cost"] = (
-            sum(lb["estimated_waste_cost"] for lb in network_waste["unused_load_balancers"]) +
-            sum(svc["estimated_waste_cost"] for svc in network_waste["low_traffic_services"])
+            sum(lb["potential_savings"] for lb in network_waste["unused_load_balancers"]) +
+            sum(ip["potential_savings"] for ip in network_waste["unused_public_ips"])
         )
         
         return network_waste
     
-    async def _quantify_cost_waste(self, cluster_data: Dict[str, Any], analysis: Dict[str, Any]) -> Dict[str, Any]:
-        """Quantify the cost impact of identified waste"""
+    def _calculate_total_waste_cost(self, analysis: Dict[str, Any]) -> float:
+        """Calculate total waste cost across all categories"""
         
-        cost_waste = {
-            "waste_by_category": {},
-            "waste_by_resource_type": {},
-            "monthly_waste_cost": 0.0,
-            "annual_waste_cost": 0.0,
-            "cost_optimization_potential": 0.0
-        }
+        total_waste = 0.0
         
-        # Aggregate waste costs by category
-        categories = {
-            "idle_resources": analysis.get("idle_resources", {}).get("idle_cost_impact", 0.0),
-            "zombie_workloads": analysis.get("zombie_workloads", {}).get("zombie_cost_impact", 0.0),
-            "overprovisioned_resources": analysis.get("overprovisioned_resources", {}).get("overprovisioning_cost", 0.0),
-            "failed_resources": analysis.get("failed_resources", {}).get("failure_cost_impact", 0.0),
-            "unused_storage": analysis.get("unused_storage", {}).get("storage_waste_cost", 0.0),
-            "network_waste": analysis.get("network_waste", {}).get("network_waste_cost", 0.0)
-        }
+        # Resource waste
+        resource_waste = analysis.get("resource_waste", {})
+        total_waste += resource_waste.get("cpu_waste", {}).get("cost", 0.0)
+        total_waste += resource_waste.get("memory_waste", {}).get("cost", 0.0)
+        total_waste += resource_waste.get("node_waste", {}).get("total_waste_cost", 0.0)
         
-        cost_waste["waste_by_category"] = categories
-        cost_waste["monthly_waste_cost"] = sum(categories.values())
-        cost_waste["annual_waste_cost"] = cost_waste["monthly_waste_cost"] * 12
-        
-        # Waste by resource type
-        cost_waste["waste_by_resource_type"] = {
-            "compute_waste": categories["idle_resources"] + categories["zombie_workloads"] + categories["overprovisioned_resources"],
-            "storage_waste": categories["unused_storage"],
-            "network_waste": categories["network_waste"],
-            "management_waste": categories["failed_resources"]
-        }
-        
-        # Calculate optimization potential (immediate vs long-term)
-        immediate_savings = categories["idle_resources"] + categories["unused_storage"] + categories["network_waste"]
-        medium_term_savings = categories["overprovisioned_resources"] + categories["zombie_workloads"]
-        long_term_savings = categories["failed_resources"]
-        
-        cost_waste["cost_optimization_potential"] = {
-            "immediate_savings": immediate_savings,  # Can be fixed within days
-            "medium_term_savings": medium_term_savings,  # Requires planning (weeks)
-            "long_term_savings": long_term_savings,  # Requires investigation (months)
-            "total_potential": immediate_savings + medium_term_savings + long_term_savings
-        }
-        
-        return cost_waste
-    
-    async def _generate_waste_summary(self, analysis: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate comprehensive waste summary"""
-        
-        summary = {
-            "total_waste_issues": 0,
-            "critical_waste_issues": 0,
-            "waste_distribution": {},
-            "top_waste_sources": [],
-            "quick_wins": [],
-            "waste_trends": {}
-        }
-        
-        # Count waste issues
-        idle_resources = analysis.get("idle_resources", {})
-        zombie_workloads = analysis.get("zombie_workloads", {})
-        overprovisioned = analysis.get("overprovisioned_resources", {})
-        failed_resources = analysis.get("failed_resources", {})
-        unused_storage = analysis.get("unused_storage", {})
-        network_waste = analysis.get("network_waste", {})
-        
-        issue_counts = {
-            "idle_nodes": len(idle_resources.get("idle_nodes", [])),
-            "idle_pods": len(idle_resources.get("idle_pods", [])),
-            "zombie_pods": len(zombie_workloads.get("zombie_pods", [])),
-            "overprovisioned_pods": len(overprovisioned.get("overprovisioned_pods", [])),
-            "failed_pods": len(failed_resources.get("failed_pods", [])),
-            "unused_volumes": len(unused_storage.get("unused_volumes", [])),
-            "unused_load_balancers": len(network_waste.get("unused_load_balancers", []))
-        }
-        
-        summary["total_waste_issues"] = sum(issue_counts.values())
-        summary["waste_distribution"] = issue_counts
-        
-        # Identify critical issues (high cost impact)
+        # Cost waste
         cost_waste = analysis.get("cost_waste", {})
-        categories = cost_waste.get("waste_by_category", {})
+        total_waste += cost_waste.get("total_cost_waste", 0.0)
         
-        for category, cost in categories.items():
-            if cost > 100:  # More than $100/month waste
-                summary["critical_waste_issues"] += 1
+        # Zombie resources
+        zombie_resources = analysis.get("zombie_resources", {})
+        total_waste += zombie_resources.get("zombie_cost_impact", 0.0)
         
-        # Top waste sources
-        top_sources = []
+        # Overprovisioning
+        overprovisioning = analysis.get("overprovisioning_analysis", {})
+        total_waste += overprovisioning.get("total_overprovisioning_cost", 0.0)
         
-        # Add top idle nodes
-        for node in idle_resources.get("idle_nodes", [])[:3]:
-            top_sources.append({
-                "source": f"Idle node: {node['node_name']}",
-                "type": "idle_resource",
-                "cost_impact": node["estimated_cost_waste"],
-                "severity": "high" if node["estimated_cost_waste"] > 50 else "medium"
-            })
+        # Idle resources
+        idle_resources = analysis.get("idle_resources", {})
+        total_waste += idle_resources.get("idle_cost_impact", 0.0)
         
-        # Add top overprovisioned pods
-        for pod in sorted(overprovisioned.get("overprovisioned_pods", []), 
-                         key=lambda x: x["estimated_waste_cost"], reverse=True)[:3]:
-            top_sources.append({
-                "source": f"Overprovisioned pod: {pod['pod_name']}",
-                "type": "overprovisioned",
-                "cost_impact": pod["estimated_waste_cost"],
-                "severity": "medium"
-            })
+        # Storage waste
+        storage_waste = analysis.get("storage_waste", {})
+        total_waste += storage_waste.get("storage_waste_cost", 0.0)
         
-        summary["top_waste_sources"] = sorted(top_sources, key=lambda x: x["cost_impact"], reverse=True)[:5]
+        # Network waste
+        network_waste = analysis.get("network_waste", {})
+        total_waste += network_waste.get("network_waste_cost", 0.0)
         
-        # Quick wins (easy to fix, high impact)
-        quick_wins = []
-        
-        # Unused load balancers are quick wins
-        for lb in network_waste.get("unused_load_balancers", []):
-            quick_wins.append({
-                "action": f"Remove unused LoadBalancer: {lb['service_name']}",
-                "effort": "low",
-                "impact": "medium",
-                "savings": lb["estimated_waste_cost"]
-            })
-        
-        # Unused storage is a quick win
-        for vol in unused_storage.get("unused_volumes", []):
-            quick_wins.append({
-                "action": f"Delete unused volume: {vol['pv_name']}",
-                "effort": "low",
-                "impact": "low",
-                "savings": vol["estimated_waste_cost"]
-            })
-        
-        summary["quick_wins"] = sorted(quick_wins, key=lambda x: x["savings"], reverse=True)[:5]
-        
-        return summary
+        return total_waste
     
-    async def _generate_waste_recommendations(self, analysis: Dict[str, Any]) -> List[str]:
+    def _calculate_waste_percentage(self, analysis: Dict[str, Any], 
+                                  node_rg_costs: Dict[str, Any]) -> float:
+        """Calculate waste percentage of total cost"""
+        
+        total_cost = node_rg_costs.get("total_cost", 0.0)
+        total_waste = analysis.get("total_waste_cost", 0.0)
+        
+        if total_cost > 0:
+            return (total_waste / total_cost) * 100
+        
+        return 0.0
+    
+    async def _generate_waste_recommendations(self, analysis: Dict[str, Any], 
+                                            node_rg_costs: Dict[str, Any]) -> List[str]:
         """Generate waste reduction recommendations"""
         
         recommendations = []
+        waste_percentage = analysis.get("waste_percentage", 0.0)
+        total_waste_cost = analysis.get("total_waste_cost", 0.0)
         
-        # Based on idle resources
-        idle_resources = analysis.get("idle_resources", {})
-        idle_nodes = idle_resources.get("idle_nodes", [])
-        idle_pods = idle_resources.get("idle_pods", [])
-        
-        if len(idle_nodes) > 0:
+        # High-level recommendations
+        if waste_percentage > 30:
             recommendations.append(
-                f"Scale down or terminate {len(idle_nodes)} idle nodes to save ~${sum(n['estimated_cost_waste'] for n in idle_nodes):.0f}/month"
+                f"CRITICAL: {waste_percentage:.1f}% waste detected (${total_waste_cost:.2f}/month) - immediate action required"
+            )
+        elif waste_percentage > 20:
+            recommendations.append(
+                f"HIGH: {waste_percentage:.1f}% waste detected (${total_waste_cost:.2f}/month) - optimization recommended"
+            )
+        elif waste_percentage > 10:
+            recommendations.append(
+                f"MEDIUM: {waste_percentage:.1f}% waste detected (${total_waste_cost:.2f}/month) - consider optimization"
             )
         
-        if len(idle_pods) > 0:
+        # Specific recommendations based on analysis
+        resource_waste = analysis.get("resource_waste", {})
+        if resource_waste.get("cpu_waste", {}).get("cost", 0.0) > 100:
             recommendations.append(
-                f"Investigate {len(idle_pods)} idle pods - consider reducing replicas or resource requests"
+                f"Optimize CPU utilization - current waste: ${resource_waste['cpu_waste']['cost']:.2f}/month"
             )
         
-        # Based on zombie workloads
-        zombie_workloads = analysis.get("zombie_workloads", {})
-        zombie_pods = zombie_workloads.get("zombie_pods", [])
-        stuck_deployments = zombie_workloads.get("stuck_deployments", [])
-        
-        if len(zombie_pods) > 0:
+        if resource_waste.get("memory_waste", {}).get("cost", 0.0) > 100:
             recommendations.append(
-                f"Clean up {len(zombie_pods)} failed/zombie pods to reclaim resources"
+                f"Optimize memory utilization - current waste: ${resource_waste['memory_waste']['cost']:.2f}/month"
             )
         
-        if len(stuck_deployments) > 0:
+        # Zombie resource recommendations
+        zombie_resources = analysis.get("zombie_resources", {})
+        if zombie_resources.get("zombie_cost_impact", 0.0) > 50:
             recommendations.append(
-                f"Fix {len(stuck_deployments)} stuck deployments to improve resource efficiency"
+                f"Clean up zombie resources - potential savings: ${zombie_resources['zombie_cost_impact']:.2f}/month"
             )
         
-        # Based on overprovisioning
-        overprovisioned = analysis.get("overprovisioned_resources", {})
-        overprovisioned_pods = overprovisioned.get("overprovisioned_pods", [])
-        
-        if len(overprovisioned_pods) > 0:
-            total_savings = sum(pod["estimated_waste_cost"] for pod in overprovisioned_pods)
+        # Overprovisioning recommendations
+        overprovisioning = analysis.get("overprovisioning_analysis", {})
+        if overprovisioning.get("total_overprovisioning_cost", 0.0) > 100:
             recommendations.append(
-                f"Right-size {len(overprovisioned_pods)} overprovisioned pods to save ~${total_savings:.0f}/month"
+                f"Address overprovisioning - potential savings: ${overprovisioning['total_overprovisioning_cost']:.2f}/month"
             )
         
-        # Based on storage waste
-        unused_storage = analysis.get("unused_storage", {})
-        unused_volumes = unused_storage.get("unused_volumes", [])
-        underutilized_volumes = unused_storage.get("underutilized_volumes", [])
-        
-        if len(unused_volumes) > 0:
+        # Storage optimization recommendations
+        storage_waste = analysis.get("storage_waste", {})
+        if storage_waste.get("storage_waste_cost", 0.0) > 50:
             recommendations.append(
-                f"Delete {len(unused_volumes)} unused storage volumes"
+                f"Optimize storage configuration - potential savings: ${storage_waste['storage_waste_cost']:.2f}/month"
             )
         
-        if len(underutilized_volumes) > 0:
-            recommendations.append(
-                f"Consider resizing {len(underutilized_volumes)} underutilized storage volumes"
-            )
-        
-        # Based on network waste
+        # Network optimization recommendations
         network_waste = analysis.get("network_waste", {})
-        unused_lbs = network_waste.get("unused_load_balancers", [])
-        
-        if len(unused_lbs) > 0:
-            lb_savings = sum(lb["estimated_waste_cost"] for lb in unused_lbs)
+        if network_waste.get("network_waste_cost", 0.0) > 20:
             recommendations.append(
-                f"Remove {len(unused_lbs)} unused LoadBalancers to save ~${lb_savings:.0f}/month"
-            )
-        
-        # Based on overall waste level
-        cost_waste = analysis.get("cost_waste", {})
-        monthly_waste = cost_waste.get("monthly_waste_cost", 0.0)
-        
-        if monthly_waste > 500:
-            recommendations.append(
-                "Implement automated waste detection and cleanup policies"
-            )
-        
-        if monthly_waste > 200:
-            recommendations.append(
-                "Establish regular resource optimization reviews"
+                f"Optimize network resources - potential savings: ${network_waste['network_waste_cost']:.2f}/month"
             )
         
         return recommendations
     
     # Helper methods
-    def _estimate_node_cost_waste(self, node_name: str, cpu_util: float, memory_util: float) -> float:
-        """Estimate cost waste for an idle node"""
-        # Simplified estimation - assume $70/month per node
-        base_cost = 70.0
-        utilization_factor = max(cpu_util, memory_util) / 100
-        waste_factor = 1 - utilization_factor
-        return base_cost * waste_factor
-    
-    def _estimate_pod_cost_waste(self, cpu_usage: float, memory_usage: float) -> float:
-        """Estimate cost waste for an idle pod"""
-        # Very rough estimation based on resource consumption
-        cpu_cost = (cpu_usage / 1000) * 20  # $20 per core per month
-        memory_cost = (memory_usage / 1024) * 5  # $5 per GB per month
-        return cpu_cost + memory_cost
-    
-    def _estimate_zombie_cost(self, age_hours: float) -> float:
-        """Estimate cost impact of zombie workload"""
-        # Assume $0.05 per hour for a typical pod
-        return age_hours * 0.05
-    
-    def _estimate_deployment_waste_cost(self, unhealthy_replicas: int) -> float:
-        """Estimate cost waste from unhealthy deployment replicas"""
-        # Assume $20/month per replica
-        return unhealthy_replicas * 20.0
-    
-    def _estimate_overprovisioning_cost(self, wasted_cpu: float, wasted_memory: float) -> float:
-        """Estimate cost of overprovisioned resources"""
-        cpu_cost = (wasted_cpu / 1000) * 20  # $20 per core per month
-        memory_cost = (wasted_memory / 1024) * 5  # $5 per GB per month
-        return cpu_cost + memory_cost
-    
-    def _estimate_failed_pod_cost(self, pod: Dict[str, Any]) -> float:
-        """Estimate cost impact of failed pod"""
-        # Simplified estimation based on pod age and resource allocation
-        return 10.0  # $10/month average for failed pod
-    
-    def _parse_storage_capacity(self, capacity_str: str) -> float:
-        """Parse storage capacity string to GB"""
-        if not capacity_str:
-            return 0.0
+    def _parse_vm_size(self, vm_size: str) -> tuple:
+        """Parse VM size to extract CPU cores and memory GB"""
+        size_mappings = {
+            "Standard_B2s": (2, 4),
+            "Standard_B4ms": (4, 16),
+            "Standard_D2s_v3": (2, 8),
+            "Standard_D4s_v3": (4, 16),
+            "Standard_D8s_v3": (8, 32),
+            "Standard_D16s_v3": (16, 64),
+            "Standard_DS2_v2": (2, 7),
+            "Standard_DS3_v2": (4, 14),
+            "Standard_DS4_v2": (8, 28),
+            "Standard_DS5_v2": (16, 56),
+            "Standard_E2s_v3": (2, 16),
+            "Standard_E4s_v3": (4, 32),
+            "Standard_E8s_v3": (8, 64),
+            "Standard_E16s_v3": (16, 128),
+            "Standard_F2s_v2": (2, 4),
+            "Standard_F4s_v2": (4, 8),
+            "Standard_F8s_v2": (8, 16),
+            "Standard_F16s_v2": (16, 32),
+        }
         
-        capacity_str = capacity_str.upper().replace("I", "")
+        return size_mappings.get(vm_size, (2, 4))
+    
+    def _estimate_vm_cost(self, vm_size: str, node_count: int) -> float:
+        """Estimate VM cost based on size and count"""
+        cost_per_hour = {
+            "Standard_B2s": 0.0416,
+            "Standard_B4ms": 0.166,
+            "Standard_D2s_v3": 0.096,
+            "Standard_D4s_v3": 0.192,
+            "Standard_D8s_v3": 0.384,
+            "Standard_D16s_v3": 0.768,
+            "Standard_DS2_v2": 0.135,
+            "Standard_DS3_v2": 0.27,
+            "Standard_DS4_v2": 0.54,
+            "Standard_DS5_v2": 1.08,
+            "Standard_E2s_v3": 0.126,
+            "Standard_E4s_v3": 0.252,
+            "Standard_E8s_v3": 0.504,
+            "Standard_E16s_v3": 1.008,
+            "Standard_F2s_v2": 0.085,
+            "Standard_F4s_v2": 0.169,
+            "Standard_F8s_v2": 0.338,
+            "Standard_F16s_v2": 0.676,
+        }
+        
+        hourly_cost = cost_per_hour.get(vm_size, 0.096)
+        return hourly_cost * node_count * 24 * 30
+    
+    def _calculate_resource_age(self, created_timestamp: str) -> int:
+        """Calculate resource age in days"""
+        if not created_timestamp:
+            return 0
         
         try:
-            if capacity_str.endswith("GB") or capacity_str.endswith("G"):
-                return float(capacity_str.replace("GB", "").replace("G", ""))
-            elif capacity_str.endswith("TB") or capacity_str.endswith("T"):
-                return float(capacity_str.replace("TB", "").replace("T", "")) * 1024
+            created_date = datetime.fromisoformat(created_timestamp.replace('Z', '+00:00'))
+            age = datetime.now() - created_date.replace(tzinfo=None)
+            return age.days
+        except:
+            return 0
+    
+    def _parse_storage_size(self, capacity: str) -> float:
+        """Parse storage capacity string to GB"""
+        if not capacity:
+            return 0.0
+        
+        try:
+            if capacity.endswith('Gi'):
+                return float(capacity[:-2])
+            elif capacity.endswith('Mi'):
+                return float(capacity[:-2]) / 1024
+            elif capacity.endswith('Ti'):
+                return float(capacity[:-2]) * 1024
             else:
-                return float(capacity_str)
-        except ValueError:
+                return float(capacity)
+        except:
             return 0.0
-    
-    def _determine_failure_reason(self, pod: Dict[str, Any]) -> str:
-        """Determine primary failure reason for a pod"""
-        status = pod.get("status", "Unknown")
-        containers = pod.get("containers", [])
-        
-        if status == "CrashLoopBackOff":
-            return "Application crashing repeatedly"
-        elif status == "Failed":
-            return "Pod execution failed"
-        elif any(c.get("restart_count", 0) > 5 for c in containers):
-            return "High restart count indicates instability"
-        else:
-            return "Unknown failure reason"
-    
-    def _map_pvcs_to_pods(self, k8s_resources: Dict[str, Any]) -> Dict[str, List[str]]:
-        """Map PVCs to pods that use them"""
-        pvc_mapping = {}
-        pods = k8s_resources.get("pods", [])
-        
-        for pod in pods:
-            pod_name = pod.get("name", "unknown")
-            namespace = pod.get("namespace", "unknown")
-            containers = pod.get("containers", [])
-            
-            for container in containers:
-                volume_mounts = container.get("volume_mounts", [])
-                for mount in volume_mounts:
-                    pvc_name = mount.get("pvc_name")  # This would need proper extraction
-                    if pvc_name:
-                        pvc_key = f"{namespace}/{pvc_name}"
-                        if pvc_key not in pvc_mapping:
-                            pvc_mapping[pvc_key] = []
-                        pvc_mapping[pvc_key].append(pod_name)
-        
-        return pvc_mapping
-    
-    def _calculate_waste_percentage(self, wasted_amount: float, resource_type: str) -> float:
-        """Calculate waste percentage for a resource type"""
-        # This would need cluster capacity data for accurate calculation
-        # Simplified estimation
-        if resource_type == "cpu":
-            # Assume cluster has 100 cores total
-            return (wasted_amount / 100000) * 100  # millicores to percentage
-        elif resource_type == "memory":
-            # Assume cluster has 400GB total
-            return (wasted_amount / 400000) * 100  # MB to percentage
-        else:
-            return 0.0
-    
-    def _calculate_total_waste_cost(self, analysis: Dict[str, Any]) -> float:
-        """Calculate total waste cost across all categories"""
-        if isinstance(analysis, dict):
-            cost_waste = analysis.get("cost_waste", {})
-            if isinstance(cost_waste, dict):
-                return cost_waste.get("monthly_waste_cost", 0.0)
-        return 0.0
-
-    
-    def _calculate_waste_percentage(self, analysis: Dict[str, Any], cluster_data: Any) -> float:
-        """Calculate waste as percentage of total cluster cost"""
-        total_waste = self._calculate_total_waste_cost(analysis)
-
-        if not isinstance(cluster_data, dict):
-            return 0.0  # or log a warning if needed
-
-        detailed_costs = cluster_data.get("detailed_costs", {})
-        if not isinstance(detailed_costs, dict):
-            detailed_costs = {}
-
-        total_cluster_cost = detailed_costs.get("summary", {}).get("total_cost", 1.0)
-
-        return (total_waste / total_cluster_cost) * 100 if total_cluster_cost > 0 else 0.0
 
     
     @staticmethod

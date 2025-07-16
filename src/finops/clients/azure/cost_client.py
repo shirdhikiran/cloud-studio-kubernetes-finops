@@ -158,7 +158,6 @@ class CostClient(BaseClient):
             'by_resource_type': {},
             'by_meter_category': {},
             'by_resource_id': {},
-            'daily_breakdown': {},
             'currency': 'USD'
         }
         
@@ -213,26 +212,12 @@ class CostClient(BaseClient):
                         costs['by_resource_id'][resource_id]['cost'] += cost
                         costs['by_resource_id'][resource_id]['usage_quantity'] += usage_quantity
                     
-                    # Daily breakdown
-                    if usage_date_raw:
-                        usage_date = self._parse_usage_date(usage_date_raw)
-                        if usage_date:
-                            date_str = usage_date.strftime('%Y-%m-%d')
-                            if date_str not in costs['daily_breakdown']:
-                                costs['daily_breakdown'][date_str] = {
-                                    'date': date_str, 'cost': 0.0, 'currency': 'USD'
-                                }
-                            costs['daily_breakdown'][date_str]['cost'] += cost
                     
             except (ValueError, TypeError, IndexError) as e:
                 self.logger.warning(f"Error processing cost row: {e}")
                 continue
         
-        # Convert daily breakdown to sorted list
-        costs['daily_breakdown'] = sorted(
-            costs['daily_breakdown'].values(), 
-            key=lambda x: x['date']
-        )
+       
         
         self.logger.info(
             f"Processed cost data for {resource_group}",

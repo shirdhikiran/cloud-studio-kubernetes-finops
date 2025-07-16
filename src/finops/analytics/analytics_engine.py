@@ -85,7 +85,6 @@ class AnalyticsReport:
     utilization_analysis: Dict[str, Any]
     waste_analysis: Dict[str, Any]
     rightsizing_analysis: Dict[str, Any]
-    forecasting_analysis: Dict[str, Any]
     benchmarking_analysis: Dict[str, Any]
     
     # Action Items
@@ -195,7 +194,6 @@ class AnalyticsEngine:
             utilization_analysis={},
             waste_analysis={},
             rightsizing_analysis={},
-            forecasting_analysis={},
             benchmarking_analysis={},
             priority_actions=[],
             metadata={}
@@ -217,7 +215,7 @@ class AnalyticsEngine:
             
                     
             # 6. Benchmarking Analytics
-            report.benchmarking_analysis = await self.benchmarking_analytics.analyze_cluster_benchmarking(cluster_data)
+            report.benchmarking_analysis = await self.benchmarking_analytics.analyze_cluster_benchmarks(cluster_data)
             
             # Generate insights from all analytics
             report.insights = await self._generate_insights(report)
@@ -327,25 +325,7 @@ class AnalyticsEngine:
             ))
             insight_id += 1
         
-        # Forecasting insights
-        forecasting = report.forecasting_analysis
-        cost_trend = forecasting.get("cost_trend", {}).get("trend_direction", "stable")
-        if cost_trend == "increasing":
-            insights.append(AnalyticsInsight(
-                id=f"TREND_{insight_id:03d}",
-                title="Increasing Cost Trend",
-                description="Cost trend is increasing - proactive optimization needed",
-                category=AnalyticsCategory.CAPACITY_PLANNING,
-                severity=AnalyticsSeverity.MEDIUM,
-                impact_score=60.0,
-                confidence=75.0,
-                potential_savings=forecasting.get("optimization_impact", 0),
-                affected_resources=[report.cluster_name],
-                recommendations=forecasting.get("recommendations", []),
-                metrics={"trend_direction": cost_trend},
-                created_at=datetime.now(timezone.utc)
-            ))
-            insight_id += 1
+        
         
         # Sort insights by impact score
         insights.sort(key=lambda x: x.impact_score, reverse=True)
@@ -409,7 +389,6 @@ class AnalyticsEngine:
                 "total_monthly_cost": report.cost_analysis.get("total_monthly_cost", 0),
                 "cost_per_pod": report.cost_analysis.get("cost_per_pod", 0),
                 "cost_per_cpu_hour": report.cost_analysis.get("cost_per_cpu_hour", 0),
-                "cost_trend": report.forecasting_analysis.get("cost_trend", {}).get("trend_direction", "stable"),
                 "cost_variance": report.cost_analysis.get("cost_variance", 0)
             },
             "utilization_metrics": {
@@ -572,7 +551,6 @@ class AnalyticsEngine:
                     "utilization_analysis": report.utilization_analysis,
                     "waste_analysis": report.waste_analysis,
                     "rightsizing_analysis": report.rightsizing_analysis,
-                    "forecasting_analysis": report.forecasting_analysis,
                     "benchmarking_analysis": report.benchmarking_analysis
                 },
                 "priority_actions": report.priority_actions,
